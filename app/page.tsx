@@ -25,6 +25,10 @@ import {
   Play,
   Award,
   GraduationCap,
+  Laptop,
+  Smartphone,
+  Globe,
+  Monitor,
 } from 'lucide-react';
 
 export default function LandingPage() {
@@ -395,6 +399,63 @@ export default function LandingPage() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* Cross-Platform & Device Compatibility Section */}
+      <section id="compatibility" className="py-20 border-b border-slate-200/80 dark:border-slate-800/60">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+          <div className="text-center space-y-3 max-w-2xl mx-auto">
+            <Badge variant="default" size="md">Cross-Platform Standard</Badge>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
+              Accessible Everywhere. Zero Local Installations.
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+              Run technical workshops without operating system lock-in. Docker containers execute securely on cloud servers, not student devices.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card className="p-5 space-y-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-500/10 text-[#4285F4] flex items-center justify-center">
+                <Laptop className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">All Major Operating Systems</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                Native browser support on <strong>Windows 10/11</strong>, <strong>macOS</strong>, <strong>Linux</strong>, <strong>ChromeOS</strong>, <strong>Android</strong>, and <strong>iOS / iPadOS</strong>.
+              </p>
+            </Card>
+
+            <Card className="p-5 space-y-3">
+              <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                <Globe className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Modern Browser Certified</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                Tested and verified across <strong>Google Chrome</strong>, <strong>Microsoft Edge</strong>, <strong>Mozilla Firefox</strong>, and <strong>Apple Safari</strong>.
+              </p>
+            </Card>
+
+            <Card className="p-5 space-y-3">
+              <div className="w-9 h-9 rounded-lg bg-yellow-500/10 text-[#FBBC04] flex items-center justify-center">
+                <Server className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Remote Cloud Sandboxing</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                Docker containers run in hardened cloud worker nodes. No virtual machines, WSL, or Docker Desktop required on student hardware.
+              </p>
+            </Card>
+
+            <Card className="p-5 space-y-3">
+              <div className="w-9 h-9 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center">
+                <Smartphone className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Adaptive Device Ergonomics</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                Mobile and tablet-friendly for viewing guides and leaderboards. <strong>Laptop/Desktop recommended</strong> for intensive command-line workshops.
+              </p>
+            </Card>
           </div>
         </div>
       </section>

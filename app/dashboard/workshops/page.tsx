@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { AppShell } from '@/components/layout/app-shell';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -36,6 +36,70 @@ export default function WorkshopListingPage() {
   const [selectedDomain, setSelectedDomain] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    async function fetchWorkshops() {
+      setIsLoading(true);
+      try {
+        const res = await fetch('/api/workshops');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+            const mapped: Workshop[] = json.data.map((w: any) => ({
+              id: w.id,
+              title: w.title,
+              slug: w.slug,
+              description: w.description,
+              domain: w.domain,
+              eventCode: w.registrationCode,
+              status: w.status,
+              maxAttendees: w.participantLimit,
+              registeredCount: w._count?.registrations ?? 0,
+              durationMinutes: w.duration,
+              bannerUrl: w.bannerUrl || 'https://images.unsplash.com/photo-1629654297299-c8506221ca97?w=800',
+              templateId: w.workshopLabs?.[0]?.labTemplateId || 'tpl-1',
+              template: w.workshopLabs?.[0]?.labTemplate
+                ? {
+                    id: w.workshopLabs[0].labTemplate.id,
+                    title: w.workshopLabs[0].labTemplate.name,
+                    slug: w.workshopLabs[0].labTemplate.name.toLowerCase().replace(/\s+/g, '-'),
+                    description: w.workshopLabs[0].labTemplate.description,
+                    domain: w.workshopLabs[0].labTemplate.domain,
+                    difficulty: w.workshopLabs[0].labTemplate.difficulty,
+                    estimatedDuration: w.workshopLabs[0].labTemplate.estimatedDuration,
+                    dockerImage: 'gdglabops/sandbox-linux-base:v1.2',
+                    defaultPort: 7681,
+                    memoryLimitMb: 512,
+                    cpuLimitCores: 0.5,
+                    storageLimitMb: 1024,
+                    learningObjectives: w.workshopLabs[0].labTemplate.learningObjectives || [],
+                    prerequisites: w.workshopLabs[0].labTemplate.prerequisites || [],
+                    environmentType: w.workshopLabs[0].labTemplate.environmentType || 'terminal',
+                    challengesCount: 4,
+                    status: 'PUBLISHED',
+                    updatedAt: w.workshopLabs[0].labTemplate.updatedAt,
+                  }
+                : mockWorkshops[0].template,
+              organiserId: w.organiserId,
+              organiserName: w.organiser?.name || 'Alex Rivera',
+              challenges: [],
+              createdAt: w.createdAt,
+              scheduledAt: w.startDate,
+              registrationDeadline: w.registrationDeadline,
+              prerequisites: [],
+            }));
+            setWorkshops(mapped);
+          }
+        }
+      } catch (err) {
+        // Fallback to initial dataset
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchWorkshops();
+  }, []);
 
   const filteredWorkshops = workshops.filter((ws) => {
     const matchesSearch =

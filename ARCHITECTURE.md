@@ -64,6 +64,25 @@ GDG LabOps abstracts local environments into **isolated, browser-accessible Dock
 - **NFR-05: Ephemerality & Lifecycle Cleanup:** Automatic garbage collection of orphaned or idle containers (configurable inactivity timeout, e.g., 20 minutes) to prevent resource leakage.
 - **NFR-06: Auditability & Observability:** Structured JSON logging for all authentication attempts, container lifecycle events, and task validation results.
 
+### 3.3 Cross-Platform & Device Compatibility Requirements
+
+- **Operating-System Independence:** The platform frontend runs entirely in standards-compliant web browsers without requiring local package managers, virtualization, or Docker installations on student hardware.
+- **Certified Operating Systems:**
+  - **Desktop / Laptop:** Windows 10 & 11, macOS (Intel & Apple Silicon), Linux (Ubuntu, Debian, Fedora, Arch, etc.), ChromeOS.
+  - **Mobile / Tablet:** Android (v10+), iOS & iPadOS (v15+).
+- **Certified Browser Engines:**
+  - Google Chrome (Blink v110+)
+  - Microsoft Edge (Blink v110+)
+  - Mozilla Firefox (Gecko v115+ ESR)
+  - Apple Safari (WebKit v16+)
+- **Adaptive Breakpoint Matrix:**
+  - Mobile Phones (`< 640px`): Single-column, collapsible sidebar, segmented guide/terminal tabs, virtual keyboard accessory keys.
+  - Tablets (`640px - 1024px`): Responsive grids, fluid tables, touch-optimized button targets (`min 40px`).
+  - Laptops (`1024px - 1440px`): Dual-column split IDE / guide layout, fixed sidebar, live telemetry charts.
+  - Large Desktop Displays (`> 1440px`): High-density live monitoring grid, multi-pane terminal views.
+- **Remote Cloud Execution Invariant:** Docker containers execute exclusively on dedicated Linux worker hosts in isolated network bridges. Zero container execution occurs on student devices.
+- **Device Ergonomics Transparency:** Terminal-heavy workshops display clear advisories recommending a physical keyboard and laptop/desktop screen, while maintaining mobile capability for reading curriculum, reviewing hints, and viewing live chapter leaderboards.
+
 ---
 
 ## 4. System Architecture: Control Plane vs. Execution Plane

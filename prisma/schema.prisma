@@ -1,0 +1,451 @@
+// ========================================================
+// GDG LabOps – Prisma Database Schema
+// Provider: Neon PostgreSQL (Serverless)
+// ========================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// --------------------------------------------------------
+// ENUMS
+// --------------------------------------------------------
+
+enum Role {
+  SUPER_ADMIN
+  ORGANISER
+  STUDENT
+}
+
+enum OrganisationRole {
+  OWNER
+  ADMIN
+  MEMBER
+  MENTOR
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
+
+enum WorkshopStatus {
+  DRAFT
+  PUBLISHED
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum RegistrationStatus {
+  REGISTERED
+  WAITLISTED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  ABSENT
+  ATTENDED
+  EXCUSED
+}
+
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum TemplateStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum EvaluationType {
+  COMMAND_EXIT_CODE
+  STDOUT_REGEX
+  FILE_CONTENT
+  HTTP_PROBE
+}
+
+enum ChallengeStatus {
+  ACTIVE
+  DRAFT
+  ARCHIVED
+}
+
+enum SessionStatus {
+  PENDING
+  PROVISIONING
+  RUNNING
+  COMPLETED
+  FAILED
+  TERMINATED
+  EXPIRED
+}
+
+enum SubmissionStatus {
+  PENDING
+  PASSED
+  FAILED
+  ERROR
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  ACHIEVEMENT
+}
+
+// --------------------------------------------------------
+// ENTITIES
+// --------------------------------------------------------
+
+/// Core platform user supporting multi-tenant memberships and role-based access
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  email        String   @unique
+  passwordHash String?  @map("password_hash")
+  avatar       String?
+  role         Role     @default(STUDENT)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  memberships         OrganisationMembership[]
+  organisedWorkshops  Workshop[]               @relation("OrganisedWorkshops")
+  createdTemplates    LabTemplate[]            @relation("CreatedTemplates")
+  registrations       WorkshopRegistration[]
+  labSessions         LabSession[]
+  submissions         ChallengeSubmission[]
+  progress            StudentProgress[]
+  userAchievements    UserAchievement[]
+  notifications       Notification[]
+  auditLogs           AuditLog[]
+
+  @@map("users")
+}
+
+/// Organisation / Chapter entity (e.g., GDG on Campus Silicon Valley)
+model Organisation {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String   @unique
+  description String?  @db.Text
+  logo        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  members      OrganisationMembership[]
+  workshops    Workshop[]
+  labTemplates LabTemplate[]
+  auditLogs    AuditLog[]
+
+  @@map("organisations")
+}
+
+/// Junction entity connecting users to organisations with roles
+model OrganisationMembership {
+  id             String           @id @default(uuid()) @db.Uuid
+  organisationId String           @map("organisation_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  role           OrganisationRole @default(MEMBER)
+  joinedAt       DateTime         @default(now()) @map("joined_at")
+  status         MembershipStatus @default(ACTIVE)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organisationId, userId], name: "unique_organisation_user")
+  @@index([userId])
+  @@index([organisationId])
+  @@map("organisation_memberships")
+}
+
+/// Workshop session managed by organisers under an organisation
+model Workshop {
+  id                   String         @id @default(uuid()) @db.Uuid
+  organisationId       String         @map("organisation_id") @db.Uuid
+  organiserId          String         @map("organiser_id") @db.Uuid
+  title                String
+  slug                 String         @unique
+  description          String         @db.Text
+  domain               String
+  bannerUrl            String?        @map("banner_url")
+  startDate            DateTime       @map("start_date")
+  endDate              DateTime       @map("end_date")
+  duration             Int            // in minutes
+  registrationDeadline DateTime       @map("registration_deadline")
+  participantLimit     Int            @default(50) @map("participant_limit")
+  registrationCode     String         @unique @map("registration_code")
+  status               WorkshopStatus @default(DRAFT)
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  organiser    User         @relation("OrganisedWorkshops", fields: [organiserId], references: [id], onDelete: Restrict)
+
+  registrations   WorkshopRegistration[]
+  workshopLabs    WorkshopLab[]
+  labSessions     LabSession[]
+  studentProgress StudentProgress[]
+
+  @@index([registrationCode])
+  @@index([status])
+  @@index([organisationId])
+  @@index([organiserId])
+  @@map("workshops")
+}
+
+/// Student enrollment in a workshop
+model WorkshopRegistration {
+  id               String             @id @default(uuid()) @db.Uuid
+  workshopId       String             @map("workshop_id") @db.Uuid
+  studentId        String             @map("student_id") @db.Uuid
+  registeredAt     DateTime           @default(now()) @map("registered_at")
+  status           RegistrationStatus @default(REGISTERED)
+  attendanceStatus AttendanceStatus   @default(ABSENT) @map("attendance_status")
+
+  workshop Workshop @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  student  User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([workshopId, studentId], name: "unique_workshop_student_registration")
+  @@index([workshopId])
+  @@index([studentId])
+  @@map("workshop_registrations")
+}
+
+/// Reusable lab template environment specifications
+model LabTemplate {
+  id                 String         @id @default(uuid()) @db.Uuid
+  organisationId     String         @map("organisation_id") @db.Uuid
+  createdBy          String         @map("created_by") @db.Uuid
+  name               String
+  description        String         @db.Text
+  domain             String
+  difficulty         Difficulty     @default(INTERMEDIATE)
+  estimatedDuration  Int            @map("estimated_duration") // in minutes
+  environmentType    String         @default("terminal") @map("environment_type")
+  learningObjectives Json           @map("learning_objectives")
+  prerequisites      Json
+  status             TemplateStatus @default(PUBLISHED)
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  creator      User         @relation("CreatedTemplates", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  workshopLabs    WorkshopLab[]
+  challenges      Challenge[]
+  labSessions     LabSession[]
+  studentProgress StudentProgress[]
+
+  @@index([organisationId])
+  @@index([domain])
+  @@map("lab_templates")
+}
+
+/// Junction enabling workshops to incorporate multiple reusable lab templates
+model WorkshopLab {
+  id            String  @id @default(uuid()) @db.Uuid
+  workshopId    String  @map("workshop_id") @db.Uuid
+  labTemplateId String  @map("lab_template_id") @db.Uuid
+  displayOrder  Int     @default(1) @map("display_order")
+  isRequired    Boolean @default(true) @map("is_required")
+
+  workshop    Workshop    @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  labTemplate LabTemplate @relation(fields: [labTemplateId], references: [id], onDelete: Restrict)
+
+  @@unique([workshopId, labTemplateId], name: "unique_workshop_lab_template")
+  @@index([workshopId])
+  @@index([labTemplateId])
+  @@map("workshop_labs")
+}
+
+/// Individual challenge milestone attached to a lab template
+model Challenge {
+  id             String          @id @default(uuid()) @db.Uuid
+  labTemplateId  String          @map("lab_template_id") @db.Uuid
+  title          String
+  description    String          @db.Text
+  instructions   String          @db.Text
+  difficulty     Difficulty      @default(INTERMEDIATE)
+  points         Int             @default(100)
+  timeLimit      Int?            @map("time_limit") // in minutes
+  displayOrder   Int             @default(1) @map("display_order")
+  evaluationType EvaluationType  @default(COMMAND_EXIT_CODE) @map("evaluation_type")
+  status         ChallengeStatus @default(ACTIVE)
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  labTemplate LabTemplate           @relation(fields: [labTemplateId], references: [id], onDelete: Cascade)
+  tasks       ChallengeTask[]
+  submissions ChallengeSubmission[]
+
+  @@index([labTemplateId])
+  @@map("challenges")
+}
+
+/// Predefined evaluation task within a challenge (strictly no raw shell scripts stored)
+model ChallengeTask {
+  id               String @id @default(uuid()) @db.Uuid
+  challengeId      String @map("challenge_id") @db.Uuid
+  title            String
+  description      String @db.Text
+  taskType         String @map("task_type") // e.g. "FILE_CHECK", "PROCESS_CHECK", "PORT_CHECK"
+  evaluationConfig Json   @map("evaluation_config") // Predefined assertions schema
+  points           Int    @default(50)
+  displayOrder     Int    @default(1) @map("display_order")
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@index([challengeId])
+  @@map("challenge_tasks")
+}
+
+/// Active or historical container sandbox session for a student
+model LabSession {
+  id                 String        @id @default(uuid()) @db.Uuid
+  studentId          String        @map("student_id") @db.Uuid
+  workshopId         String        @map("workshop_id") @db.Uuid
+  labTemplateId      String        @map("lab_template_id") @db.Uuid
+  status             SessionStatus @default(PENDING)
+  containerReference String?       @map("container_reference") // Internal Docker ID, shielded from clients
+  accessUrl          String?       @map("access_url")          // Short-lived signed proxy gateway URL
+  startedAt          DateTime?     @map("started_at")
+  expiresAt          DateTime?     @map("expires_at")
+  terminatedAt       DateTime?     @map("terminated_at")
+  createdAt          DateTime      @default(now()) @map("created_at")
+
+  student     User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  workshop    Workshop    @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  labTemplate LabTemplate @relation(fields: [labTemplateId], references: [id], onDelete: Restrict)
+
+  submissions ChallengeSubmission[]
+
+  @@index([studentId])
+  @@index([workshopId])
+  @@index([status])
+  @@map("lab_sessions")
+}
+
+/// Submission and automated grading record
+model ChallengeSubmission {
+  id             String           @id @default(uuid()) @db.Uuid
+  studentId      String           @map("student_id") @db.Uuid
+  challengeId    String           @map("challenge_id") @db.Uuid
+  labSessionId   String           @map("lab_session_id") @db.Uuid
+  submissionData Json             @map("submission_data")
+  score          Int              @default(0)
+  status         SubmissionStatus @default(PENDING)
+  submittedAt    DateTime         @default(now()) @map("submitted_at")
+  evaluatedAt    DateTime?        @map("evaluated_at")
+
+  student    User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  challenge  Challenge   @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  labSession LabSession  @relation(fields: [labSessionId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([challengeId])
+  @@index([labSessionId])
+  @@map("challenge_submissions")
+}
+
+/// Cumulative progress tracker per student for a given workshop and lab
+model StudentProgress {
+  id                   String    @id @default(uuid()) @db.Uuid
+  studentId            String    @map("student_id") @db.Uuid
+  workshopId           String    @map("workshop_id") @db.Uuid
+  labTemplateId        String    @map("lab_template_id") @db.Uuid
+  completedChallenges  Int       @default(0) @map("completed_challenges")
+  totalChallenges      Int       @default(0) @map("total_challenges")
+  totalPoints          Int       @default(0) @map("total_points")
+  completionPercentage Float     @default(0.0) @map("completion_percentage")
+  completedAt          DateTime? @map("completed_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  student     User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  workshop    Workshop    @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  labTemplate LabTemplate @relation(fields: [labTemplateId], references: [id], onDelete: Restrict)
+
+  @@unique([studentId, workshopId, labTemplateId], name: "unique_student_workshop_lab_progress")
+  @@index([studentId])
+  @@index([workshopId])
+  @@map("student_progress")
+}
+
+/// Catalog of achievement badges
+model Achievement {
+  id          String @id @default(uuid()) @db.Uuid
+  name        String
+  description String
+  icon        String
+  category    String
+  points      Int    @default(50)
+
+  userAchievements UserAchievement[]
+
+  @@map("achievements")
+}
+
+/// Junction tracking which achievements a user has earned
+model UserAchievement {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  achievementId String   @map("achievement_id") @db.Uuid
+  awardedAt     DateTime @default(now()) @map("awarded_at")
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId], name: "unique_user_achievement")
+  @@index([userId])
+  @@map("user_achievements")
+}
+
+/// User notification inbox
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  title     String
+  message   String           @db.Text
+  type      NotificationType @default(INFO)
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+/// Sanitized operational audit trails
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String?  @map("user_id") @db.Uuid
+  organisationId String?  @map("organisation_id") @db.Uuid
+  action         String
+  resourceType   String   @map("resource_type")
+  resourceId     String?  @map("resource_id")
+  metadata       Json?    // Sanitized: never passwords, tokens, or shell secrets
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organisation Organisation? @relation(fields: [organisationId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([organisationId])
+  @@index([resourceType])
+  @@map("audit_logs")
+}

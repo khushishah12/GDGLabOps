@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { AppShell } from '@/components/layout/app-shell';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -25,14 +25,44 @@ import {
 export default function StudentOverviewPage() {
   const { currentUser } = useUser();
   const { info } = useToast();
+  const [profileData, setProfileData] = useState<{
+    points: number;
+    enrolledCount: number;
+    solvedCount: number;
+  }>({
+    points: currentUser.points || 850,
+    enrolledCount: 3,
+    solvedCount: 14,
+  });
+
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const res = await fetch('/api/student/profile');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data) {
+            setProfileData({
+              points: json.data.totalPoints || currentUser.points || 850,
+              enrolledCount: json.data.enrolledWorkshopsCount ?? 3,
+              solvedCount: json.data.solvedChallengesCount ?? 14,
+            });
+          }
+        }
+      } catch (err) {
+        // Fallback to initial values
+      }
+    }
+    loadProfile();
+  }, [currentUser.points]);
 
   const enrolledWorkshops = mockWorkshops.slice(0, 2);
 
   const stats = [
     {
       title: 'Enrolled Workshops',
-      value: '3',
-      sub: '2 active, 1 upcoming',
+      value: profileData.enrolledCount.toString(),
+      sub: 'Active study jams',
       icon: Calendar,
       color: 'text-[#4285F4]',
       bg: 'bg-blue-500/10',
@@ -47,15 +77,15 @@ export default function StudentOverviewPage() {
     },
     {
       title: 'Completed Challenges',
-      value: '14',
-      sub: 'Across 4 workshops',
+      value: profileData.solvedCount.toString(),
+      sub: 'Across active workshops',
       icon: CheckCircle2,
       color: 'text-[#FBBC04]',
       bg: 'bg-yellow-500/10',
     },
     {
       title: 'Total Points',
-      value: `${currentUser.points || 850}`,
+      value: profileData.points.toString(),
       sub: 'Top 5% in Chapter',
       icon: Trophy,
       color: 'text-[#EA4335]',
