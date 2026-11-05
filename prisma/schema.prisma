@@ -110,6 +110,8 @@ enum SessionStatus {
   PENDING
   PROVISIONING
   RUNNING
+  STOPPING
+  STOPPED
   COMPLETED
   FAILED
   TERMINATED
@@ -293,6 +295,7 @@ model LabTemplate {
   requiredTools      Json?          @map("required_tools")
   version            Int            @default(1)
   environmentType    String         @default("terminal") @map("environment_type")
+  environmentProfile String         @default("ubuntu-fundamentals") @map("environment_profile")
   learningObjectives Json           @map("learning_objectives")
   prerequisites      Json
   status             TemplateStatus @default(PUBLISHED)
@@ -388,9 +391,20 @@ model LabSession {
   status             SessionStatus @default(PENDING)
   containerReference String?       @map("container_reference") // Internal Docker ID, shielded from clients
   accessUrl          String?       @map("access_url")          // Short-lived signed proxy gateway URL
+  runnerUrl          String?       @map("runner_url")
+  runnerId           String?       @map("runner_id")
+  environmentProfile String?       @map("environment_profile")
+  sessionToken       String?       @unique @map("session_token")
+  connectionTicket   String?       @map("connection_ticket")
+  ticketExpiresAt    DateTime?     @map("ticket_expires_at")
+  lastActivityAt     DateTime?     @map("last_activity_at")
   startedAt          DateTime?     @map("started_at")
+  stoppedAt          DateTime?     @map("stopped_at")
   expiresAt          DateTime?     @map("expires_at")
   terminatedAt       DateTime?     @map("terminated_at")
+  terminationReason  String?       @map("termination_reason")
+  failureReason      String?       @map("failure_reason")
+  resourceLimits     Json?         @map("resource_limits")
   createdAt          DateTime      @default(now()) @map("created_at")
 
   student     User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -398,11 +412,46 @@ model LabSession {
   labTemplate LabTemplate @relation(fields: [labTemplateId], references: [id], onDelete: Restrict)
 
   submissions ChallengeSubmission[]
+  events      SessionEvent[]
+  metrics     ResourceUsageMetric[]
 
   @@index([studentId])
   @@index([workshopId])
   @@index([status])
+  @@index([sessionToken])
   @@map("lab_sessions")
+}
+
+/// Audit log of container lifecycle and connection events
+model SessionEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  sessionId String   @map("session_id") @db.Uuid
+  eventType String   @map("event_type")
+  message   String?  @db.Text
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  session LabSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([eventType])
+  @@map("session_events")
+}
+
+/// Periodic telemetry snapshots of container resource consumption
+model ResourceUsageMetric {
+  id            String   @id @default(uuid()) @db.Uuid
+  sessionId     String   @map("session_id") @db.Uuid
+  cpuPercent    Float    @default(0) @map("cpu_percent")
+  memoryUsageMb Float    @default(0) @map("memory_usage_mb")
+  pidsCount     Int      @default(0) @map("pids_count")
+  recordedAt    DateTime @default(now()) @map("recorded_at")
+
+  session LabSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([recordedAt])
+  @@map("resource_usage_metrics")
 }
 
 /// Submission and automated grading record

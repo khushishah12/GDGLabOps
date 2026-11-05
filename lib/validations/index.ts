@@ -325,17 +325,36 @@ export const createLabSessionSchema = z.object({
   studentId: uuidSchema,
   workshopId: uuidSchema,
   labTemplateId: uuidSchema,
+  environmentProfile: z.string().optional(),
+});
+
+export const launchLabSessionSchema = z.object({
+  workshopId: uuidSchema,
+  labTemplateId: uuidSchema,
+  environmentProfile: z.string().optional(),
 });
 
 export const updateLabSessionStatusSchema = z.object({
-  status: z.enum(['PENDING', 'PROVISIONING', 'RUNNING', 'COMPLETED', 'FAILED', 'TERMINATED', 'EXPIRED']),
+  status: z.enum([
+    'PENDING',
+    'PROVISIONING',
+    'RUNNING',
+    'STOPPING',
+    'STOPPED',
+    'COMPLETED',
+    'FAILED',
+    'TERMINATED',
+    'EXPIRED',
+  ]),
 });
 
 // Valid state machine transitions for lab sessions
 export const validSessionTransitions: Record<string, string[]> = {
   PENDING: ['PROVISIONING', 'FAILED', 'TERMINATED'],
   PROVISIONING: ['RUNNING', 'FAILED', 'TERMINATED'],
-  RUNNING: ['COMPLETED', 'FAILED', 'TERMINATED', 'EXPIRED'],
+  RUNNING: ['STOPPING', 'STOPPED', 'COMPLETED', 'FAILED', 'TERMINATED', 'EXPIRED'],
+  STOPPING: ['STOPPED', 'FAILED', 'TERMINATED'],
+  STOPPED: ['PROVISIONING', 'TERMINATED'],
   COMPLETED: [], // Completed sessions cannot be restarted by status update
   FAILED: ['TERMINATED'],
   TERMINATED: [],

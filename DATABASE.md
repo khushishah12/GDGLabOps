@@ -322,20 +322,60 @@ Active sandbox execution environments allocated to students on remote execution 
 | `student_id` | `UUID` | No | Foreign Key (`users.id`) `ON DELETE CASCADE` | Operating student |
 | `workshop_id` | `UUID` | No | Foreign Key (`workshops.id`) `ON DELETE CASCADE` | Context workshop |
 | `lab_template_id`| `UUID` | No | Foreign Key (`lab_templates.id`) `ON DELETE RESTRICT` | Environment template |
-| `status` | `SessionStatus` | No | Default: `PENDING` | Lifecycle state |
+| `status` | `SessionStatus` | No | Default: `PENDING` | Lifecycle state (`PENDING`, `PROVISIONING`, `RUNNING`, `STOPPING`, `STOPPED`, `COMPLETED`, `FAILED`, `TERMINATED`, `EXPIRED`) |
 | `container_reference`| `TEXT` | Yes | **Server-side only** | Internal Docker container ID / hash |
 | `access_url` | `TEXT` | Yes | Ephemeral | WebSocket / web proxy URL |
+| `runner_url` | `TEXT` | Yes | — | Internal execution host URL |
+| `runner_id` | `TEXT` | Yes | — | Identifier of executing runner node |
+| `environment_profile`| `TEXT` | Yes | Default: `ubuntu-fundamentals` | Approved image profile tag |
+| `session_token` | `TEXT` | Yes | Unique | Cryptographic session authorization token |
+| `connection_ticket` | `TEXT` | Yes | Ephemeral | Single-use HMAC-signed WebSocket ticket |
+| `ticket_expires_at` | `TIMESTAMPTZ` | Yes | — | Expiration time for ticket redemption |
+| `last_activity_at` | `TIMESTAMPTZ` | Yes | — | Last received terminal command / heartbeat |
 | `started_at` | `TIMESTAMPTZ` | Yes | — | Timestamp container became live |
+| `stopped_at` | `TIMESTAMPTZ` | Yes | — | Timestamp container stopped |
 | `expires_at` | `TIMESTAMPTZ` | Yes | — | TTL expiration deadline |
 | `terminated_at` | `TIMESTAMPTZ` | Yes | — | Teardown timestamp |
+| `termination_reason` | `TEXT` | Yes | — | Reason (`STUDENT_STOPPED`, `TIMEOUT_EXPIRED`, `ADMIN_TERMINATED`) |
+| `failure_reason` | `TEXT` | Yes | — | Diagnostic error message if failed |
+| `resource_limits` | `JSONB` | Yes | — | Effective cgroups limits (memory, nanoCPUs, pids) |
 | `created_at` | `TIMESTAMPTZ` | No | Default: `now()` | Session creation timestamp |
 
 **Security Note:** `container_reference` is strictly stripped from all student-facing API responses to avoid leaking underlying cloud infrastructure identifiers.
 
 **Indexes & Constraints:**
+- `lab_sessions_session_token_key`: Unique constraint on `session_token`
 - `lab_sessions_student_id_idx`: B-tree index on `student_id`
 - `lab_sessions_workshop_id_idx`: B-tree index on `workshop_id`
 - `lab_sessions_status_idx`: B-tree index on `status`
+
+---
+
+### 4.11. `session_events`
+Audit log of container lifecycle transitions and terminal connection events.
+
+| Column | PostgreSQL Type | Nullable | Constraints & Defaults | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `id` | `UUID` | No | Primary Key, `gen_random_uuid()` | Event identifier |
+| `session_id` | `UUID` | No | Foreign Key (`lab_sessions.id`) `ON DELETE CASCADE` | Associated lab session |
+| `event_type` | `VARCHAR(100)` | No | — | Event name (`PROVISION_REQUESTED`, `CONTAINER_STARTED`, `WS_CONNECTED`, `HEARTBEAT`, `CONTAINER_STOPPED`, `CONTAINER_DESTROYED`, `ERROR`) |
+| `message` | `TEXT` | Yes | — | Human-readable log summary |
+| `metadata` | `JSONB` | Yes | — | Event diagnostic attributes |
+| `created_at` | `TIMESTAMPTZ` | No | Default: `now()` | Event recorded timestamp |
+
+---
+
+### 4.12. `resource_usage_metrics`
+Telemetry snapshots recording container resource utilization.
+
+| Column | PostgreSQL Type | Nullable | Constraints & Defaults | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `id` | `UUID` | No | Primary Key, `gen_random_uuid()` | Metric identifier |
+| `session_id` | `UUID` | No | Foreign Key (`lab_sessions.id`) `ON DELETE CASCADE` | Target lab session |
+| `cpu_percent` | `DOUBLE PRECISION`| No | Default: `0` | CPU utilization percentage |
+| `memory_usage_mb`| `DOUBLE PRECISION`| No | Default: `0` | Resident set size (RSS) memory in MB |
+| `pids_count` | `INTEGER` | No | Default: `0` | Active process count in container |
+| `recorded_at` | `TIMESTAMPTZ` | No | Default: `now()` | Timestamp of metric snapshot |
 
 ---
 

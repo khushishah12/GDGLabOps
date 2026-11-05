@@ -39,6 +39,18 @@ function LoginForm() {
       : ''
   );
 
+  const handleAutoFill = (role: 'ORGANISER' | 'STUDENT') => {
+    if (role === 'ORGANISER') {
+      setEmail('alex.rivera@gdgcampus.dev');
+      setPassword('Organiser@Pass2026!');
+      toastSuccess('Filled demo Organiser credentials');
+    } else {
+      setEmail('elena.rostova@student.gdg.dev');
+      setPassword('Student@Pass2026!');
+      toastSuccess('Filled demo Student credentials');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
@@ -227,19 +239,47 @@ function LoginForm() {
 
           {/* Quick Demo Credentials Help */}
           <div className="mt-6 pt-5 border-t border-slate-200/80 dark:border-slate-800/80">
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mb-2 font-medium">
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />
-              Demo Roles Provisioned in Neon:
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between mb-2 font-medium">
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />
+                Demo Roles Provisioned in Neon:
+              </span>
+              <span className="text-[10px] text-blue-500 dark:text-blue-400 font-mono">
+                Click to autofill
+              </span>
             </div>
             <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <div className="p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                <div className="font-semibold text-slate-700 dark:text-slate-300">Organiser</div>
-                <div className="text-slate-500 truncate">alex.rivera@gdgcampus.dev</div>
-              </div>
-              <div className="p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                <div className="font-semibold text-slate-700 dark:text-slate-300">Student</div>
-                <div className="text-slate-500 truncate">elena.rostova@student.gdg.dev</div>
-              </div>
+              <button
+                type="button"
+                onClick={() => handleAutoFill('ORGANISER')}
+                className="p-2.5 rounded-lg text-left bg-slate-50 hover:bg-blue-50/70 dark:bg-slate-900 dark:hover:bg-blue-950/40 border border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600 transition-all cursor-pointer group shadow-sm"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                    Organiser
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-mono font-medium">
+                    Fill
+                  </span>
+                </div>
+                <div className="text-slate-500 text-[10px] truncate mt-0.5">alex.rivera@gdgcampus.dev</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleAutoFill('STUDENT')}
+                className="p-2.5 rounded-lg text-left bg-slate-50 hover:bg-blue-50/70 dark:bg-slate-900 dark:hover:bg-blue-950/40 border border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600 transition-all cursor-pointer group shadow-sm"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                    Student
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-mono font-medium">
+                    Fill
+                  </span>
+                </div>
+                <div className="text-slate-500 text-[10px] truncate mt-0.5">elena.rostova@student.gdg.dev</div>
+              </button>
             </div>
           </div>
         </div>

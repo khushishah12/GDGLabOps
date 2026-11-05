@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { SessionService } from '@/lib/services/session.service';
+import { getCurrentUser } from '@/lib/auth/session';
 import { updateLabSessionStatusSchema } from '@/lib/validations';
 import { apiSuccess, apiError } from '@/lib/api-response';
 
@@ -8,8 +9,26 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await SessionService.getById(params.id);
+    const user = await getCurrentUser();
+    const session = await SessionService.getById(params.id, user?.id);
     return apiSuccess(session);
+  } catch (err) {
+    return apiError(err);
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const user = await getCurrentUser();
+    const stopped = await SessionService.terminateSession(
+      params.id,
+      'STUDENT_STOPPED',
+      user?.id
+    );
+    return apiSuccess(stopped, 'Lab session terminated and container resources reclaimed');
   } catch (err) {
     return apiError(err);
   }

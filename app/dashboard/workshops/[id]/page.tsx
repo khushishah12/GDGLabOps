@@ -371,6 +371,11 @@ export default function WorkshopDetailPage() {
                 Manage Participants ({confirmedCount})
               </Button>
             </Link>
+            <Link href={`/dashboard/workshops/${workshop.id}/sessions`}>
+              <Button size="sm" variant="outline" className="text-xs" leftIcon={<Terminal className="w-3.5 h-3.5 text-emerald-500" />}>
+                Live Lab Sessions
+              </Button>
+            </Link>
             <Button
               variant="outline"
               size="sm"

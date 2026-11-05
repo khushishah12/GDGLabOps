@@ -30,7 +30,7 @@ Traditional tech workshops suffer from the "installation nightmare" — particip
 | **Data Validation** | [Zod](https://zod.dev/) | Strict runtime input assertion and sanitization |
 | **Icons & Visuals** | [Lucide React](https://lucide.dev/) | Clean developer-centric icon set |
 | **Data Visualization** | [Recharts](https://recharts.org/) | Analytics, attendance, and session charts |
-| **Execution Plane** *(Upcoming)* | Isolated Docker Host + Socket.IO | Remote Linux container sandboxes and streaming terminal |
+| **Execution Plane** | Dedicated Node.js Daemon + Docker Engine | Linux container sandboxes, cgroup isolation, and WebSocket PTY gateway |
 
 ---
 

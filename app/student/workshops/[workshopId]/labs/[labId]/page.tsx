@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/lib/toast-context';
 import {
+  Terminal,
+  Play,
   ArrowLeft,
   CheckCircle2,
   AlertCircle,
@@ -43,6 +45,22 @@ export default function StudentLabWorkspacePage() {
   const [unlockedHints, setUnlockedHints] = useState<Record<string, string[]>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionFeedback, setSubmissionFeedback] = useState<Record<string, any>>({});
+  const [isLaunchingLab, setIsLaunchingLab] = useState(false);
+  const [activeSession, setActiveSession] = useState<any>(null);
+
+  const checkActiveSession = async () => {
+    try {
+      const res = await fetch('/api/sessions');
+      const json = await res.json();
+      if (res.ok && json.success && json.data) {
+        if (json.data.workshopId === workshopId && json.data.labTemplateId === labId) {
+          setActiveSession(json.data);
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  };
 
   const fetchLabData = async () => {
     if (!workshopId || !labId) return;
@@ -64,7 +82,33 @@ export default function StudentLabWorkspacePage() {
 
   useEffect(() => {
     fetchLabData();
+    checkActiveSession();
   }, [workshopId, labId]);
+
+  const handleLaunchCloudEnvironment = async () => {
+    setIsLaunchingLab(true);
+    try {
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workshopId,
+          labTemplateId: labId,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success && json.data) {
+        success('Environment Ready', 'Cloud Linux container provisioned.');
+        router.push(`/student/lab/${json.data.id}`);
+      } else {
+        error('Launch Failed', json.error?.message || 'Failed to provision lab container.');
+      }
+    } catch {
+      error('Error', 'Network error launching environment.');
+    } finally {
+      setIsLaunchingLab(false);
+    }
+  };
 
   const activeChallenge = data?.lab?.challenges?.[activeChallengeIdx];
 
@@ -233,6 +277,49 @@ export default function StudentLabWorkspacePage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Panel: Milestone Navigation & Objectives */}
           <div className="lg:col-span-4 space-y-4">
+            {/* Cloud Linux Environment Card */}
+            <Card className="p-4 bg-gradient-to-br from-slate-900 to-slate-950 text-white border-slate-800 space-y-3 shadow-md">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-emerald-400" />
+                  <span className="font-bold text-xs text-slate-100">Remote Cloud Environment</span>
+                </div>
+                <Badge variant="outline" size="sm" className="bg-slate-800 text-slate-300 border-slate-700 font-mono text-[10px]">
+                  {template.environmentProfile || 'ubuntu-fundamentals'}
+                </Badge>
+              </div>
+
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Zero local setup. Runs in an isolated Linux cloud sandbox directly from your web browser.
+              </p>
+
+              <Button
+                variant="primary"
+                size="sm"
+                className="w-full text-xs font-semibold flex items-center justify-center gap-2"
+                onClick={
+                  activeSession
+                    ? () => router.push(`/student/lab/${activeSession.id}`)
+                    : handleLaunchCloudEnvironment
+                }
+                disabled={isLaunchingLab}
+              >
+                {isLaunchingLab ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Provisioning Container...
+                  </>
+                ) : activeSession ? (
+                  <>
+                    <Play className="w-3.5 h-3.5 text-emerald-400" /> Resume Cloud Terminal
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3.5 h-3.5" /> Launch Cloud Environment
+                  </>
+                )}
+              </Button>
+            </Card>
+
             <Card className="p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">

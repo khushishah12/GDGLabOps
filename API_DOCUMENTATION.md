@@ -696,3 +696,92 @@ Any illegal transition returns `400 Bad Request`.
 - **Sync Snapshot:** `POST /api/workshops/:id/labs/:labId` with `{ "action": "sync_snapshot" }`
 - **Student Workshop Lab Workspace:** `GET /api/student/workshops/:workshopId/labs/:labId`
   - Verifies registration, delivers sanitized challenges, and student's progress tracking.
+
+---
+
+## 9. Cloud Lab Execution Engine API (Prompt 7)
+
+### 9.1. Launch Remote Lab Environment
+- **Endpoint:** `POST /api/sessions`
+- **Authentication:** Student Session or API Token
+- **Body:**
+```json
+{
+  "workshopId": "dbbbf7dd-562e-44c9-ad97-439886fb056d",
+  "labTemplateId": "c0000000-0000-4000-8000-000000000001",
+  "environmentProfile": "ubuntu-fundamentals"
+}
+```
+- **Validation & Quota Enforcement:**
+  - Verifies student registration in workshop (`REGISTERED` or `ATTENDED`).
+  - Verifies workshop is `PUBLISHED` or `ONGOING`.
+  - Enforces per-student concurrent quota (max 1 active lab). Returns existing session if already launched for the same lab.
+- **Response (`201 Created`):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "e4567890-1234-4567-8901-234567890123",
+    "workshopId": "dbbbf7dd-562e-44c9-ad97-439886fb056d",
+    "labTemplateId": "c0000000-0000-4000-8000-000000000001",
+    "status": "RUNNING",
+    "environmentProfile": "ubuntu-fundamentals",
+    "startedAt": "2026-11-05T14:00:00.000Z",
+    "expiresAt": "2026-11-05T15:00:00.000Z",
+    "connectionTicket": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "accessUrl": "ws://runner.labops.internal:8080/ws/terminal?ticket=...",
+    "resourceLimits": {
+      "memoryMb": 512,
+      "nanoCpus": 1000000000,
+      "pidsLimit": 64,
+      "maxDurationMinutes": 60
+    }
+  },
+  "message": "Lab environment provisioned and ready"
+}
+```
+
+---
+
+### 9.2. Session Query & Heartbeat Keepalive
+- **Get Active Session:** `GET /api/sessions`
+  - Returns current user's active `PROVISIONING` or `RUNNING` lab session.
+- **Get Session Details & Live Telemetry:** `GET /api/sessions/:id`
+  - Returns session status, remaining lease duration, and live CPU/memory telemetry.
+- **Heartbeat Keepalive:** `POST /api/sessions/:id/heartbeat`
+  - Updates `lastActivityAt`. Prevents idle cleanup.
+- **Refresh Connection Ticket:** `POST /api/sessions/:id/ticket`
+  - Mints fresh single-use ticket for WebSocket reconnection after tab refresh.
+
+---
+
+### 9.3. Terminate Session
+- **Student Stop:** `DELETE /api/sessions/:id`
+  - Reclaims container resources, marks status `TERMINATED` with `terminationReason: "STUDENT_STOPPED"`.
+- **Organiser Emergency Kill:** `POST /api/organiser/sessions/:sessionId/terminate`
+  - Requires `ORGANISER` role. Reclaims container with `terminationReason: "ADMIN_TERMINATED"`.
+
+---
+
+### 9.4. Organiser Workshop Session Telemetry
+- **Endpoint:** `GET /api/organiser/workshops/:workshopId/sessions`
+- **Requires:** Organiser membership in workshop's organisation.
+- **Response (`200 OK`):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "e4567890-1234-4567-8901-234567890123",
+      "studentName": "Alex Chen",
+      "studentEmail": "alex.chen@student.gdg.org",
+      "labName": "Docker & Container Basics",
+      "status": "RUNNING",
+      "environmentProfile": "ubuntu-fundamentals",
+      "startedAt": "2026-11-05T14:00:00.000Z",
+      "expiresAt": "2026-11-05T15:00:00.000Z",
+      "createdAt": "2026-11-05T13:59:50.000Z"
+    }
+  ]
+}
+```
