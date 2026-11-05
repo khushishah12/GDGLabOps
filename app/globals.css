@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #1a73e8;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  --muted: #f8fafc;
+  --muted-foreground: #64748b;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #4285f4;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: #090d16;
+  --foreground: #f8fafc;
+  --card: #0e1526;
+  --card-foreground: #f8fafc;
+  --popover: #0e1526;
+  --popover-foreground: #f8fafc;
+  --primary: #4285f4;
+  --primary-foreground: #ffffff;
+  --secondary: #162035;
+  --secondary-foreground: #f8fafc;
+  --muted: #111a2e;
+  --muted-foreground: #94a3b8;
+  --accent: #162035;
+  --accent-foreground: #f8fafc;
+  --border: #1e2d4a;
+  --input: #1e2d4a;
+  --ring: #4285f4;
+}
+
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  color: var(--foreground);
+  background: var(--background);
+  font-feature-settings: "rlig" 1, "calt" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Touch-friendly responsiveness */
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+/* Cross-browser custom subtle scrollbars (Firefox + Chromium + WebKit/Safari) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
+}
+
+/* Terminal & Code Styling */
+.terminal-font {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
