@@ -518,3 +518,102 @@ Any illegal transition returns `400 Bad Request`.
 ### 6.3. Get Student Unlocked Achievements
 - **Endpoint:** `GET /api/student/achievements?studentId=00000000-0000-4000-8000-000000000003`
 - Returns earned badges with award dates alongside all available achievements in the catalog.
+
+---
+
+## 7. Workshop & Event Management APIs (Prompt 5)
+
+### 7.1. List Workshops with Advanced Query Filters
+- **Endpoint:** `GET /api/workshops`
+- **Query Parameters:**
+  - `domain` *(string, optional)*: Filter by technical domain (e.g. `Cloud Computing`, `DevOps`, `Cybersecurity`)
+  - `difficulty` *(string, optional)*: `BEGINNER` | `INTERMEDIATE` | `ADVANCED`
+  - `venueType` *(string, optional)*: `ONLINE` | `OFFLINE` | `HYBRID`
+  - `status` *(string, optional)*: `DRAFT` | `PUBLISHED` | `REGISTRATION_CLOSED` | `FULL` | `ONGOING` | `COMPLETED` | `CANCELLED`
+  - `isPublic` *(boolean, optional)*: Filter by public discovery listing
+  - `search` *(string, optional)*: Case-insensitive match on title, description, or event code
+  - `page` *(number, optional, default: 1)*
+  - `limit` *(number, optional, default: 20)*
+
+#### Response (`200 OK`):
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "dbbbf7dd-562e-44c9-ad97-439886fb056d",
+      "title": "Hands-on Linux & Cloud Shell Mastery",
+      "slug": "hands-on-linux-cloud-shell-mastery",
+      "domain": "DevOps",
+      "difficulty": "BEGINNER",
+      "status": "PUBLISHED",
+      "registrationCode": "GDG-LNX-2026",
+      "codeJoinEnabled": true,
+      "participantLimit": 50,
+      "confirmedRegistrations": 42,
+      "waitlistedRegistrations": 0,
+      "duration": 120,
+      "startDate": "2026-11-20T14:00:00.000Z",
+      "endDate": "2026-11-20T16:00:00.000Z",
+      "venueType": "ONLINE"
+    }
+  ],
+  "pagination": { "page": 1, "limit": 20, "total": 1, "totalPages": 1 }
+}
+```
+
+---
+
+### 7.2. Workshop Duplicate & Unpublish
+- **Duplicate Endpoint:** `POST /api/workshops/:id/duplicate`
+  - Clones workshop parameters and blueprints into a fresh `DRAFT` with a new slug and unique event code.
+- **Unpublish Endpoint:** `POST /api/workshops/:id/unpublish`
+  - Reverts a `PUBLISHED` workshop to `DRAFT`.
+  - **Constraint:** Strictly returns `409 Conflict` if any confirmed registrations exist (`confirmedRegistrations > 0`).
+
+---
+
+### 7.3. Event Joining Code Operations
+- **Regenerate Code:** `POST /api/workshops/:id/code/regenerate`
+  - Generates a fresh cryptographic joining code using non-ambiguous characters.
+- **Toggle Code Joining:** `PATCH /api/workshops/:id/code/toggle`
+  - Body: `{ "enabled": boolean }`
+- **Rate-Limited Code Lookup:** `GET /api/workshops/code/:code`
+  - Resolves workshop metadata for student preview. Rate limited to 10 requests per 5 minutes per IP.
+
+---
+
+### 7.4. Student Workshop Registration
+- **Endpoint:** `POST /api/workshops/register`
+- **Request Body (Direct or Code):**
+```json
+{
+  "workshopId": "dbbbf7dd-562e-44c9-ad97-439886fb056d",
+  "registrationCode": "GDG-LNX-2026",
+  "studentId": "00000000-0000-4000-8000-000000000003",
+  "notes": "Looking forward to learning POSIX shell commands."
+}
+```
+- **Behavior:**
+  - If seats available: assigns `REGISTERED`.
+  - If capacity reached: assigns `WAITLISTED`.
+  - If approval required: assigns `PENDING_APPROVAL`.
+  - If already registered: returns `409 Conflict`.
+
+---
+
+### 7.5. Participant Self-Cancellation & Automatic Waitlist Promotion
+- **Endpoint:** `DELETE /api/workshops/registrations/:id`
+- **Behavior:**
+  - Updates student registration to `CANCELLED`.
+  - If the cancelled seat was confirmed, automatically queries the oldest waitlisted registration (`registeredAt ASC`) and promotes them to `REGISTERED`.
+
+---
+
+### 7.6. Organiser Participant Management & CSV Export
+- **List Participants:** `GET /api/workshops/:id/participants?status=REGISTERED&search=Elena`
+- **Manage Participant:** `PATCH /api/workshops/:id/participants/:regId`
+  - Body: `{ "action": "APPROVE" | "REJECT" | "CANCEL", "notes": "Optional reason" }`
+  - Writes audit record to `AuditLog`.
+- **Export Participant CSV:** `GET /api/workshops/:id/participants/export`
+  - Returns `text/csv` stream with headers: `Participant Name, Email Address, Registration Date (UTC), Status, Attendance, Notes`.

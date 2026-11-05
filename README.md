@@ -179,6 +179,7 @@ d:/projects/GDGLABOPS/
 ├── API_DOCUMENTATION.md         # Full REST API specification
 ├── AUTHENTICATION.md            # Auth.js flows, session cookies & password hashing
 ├── RBAC.md                      # Role hierarchy, permissions & IDOR defenses
+├── WORKSHOP_MANAGEMENT.md       # Workshop lifecycle, joining codes & registration engine
 ├── SECURITY.md                  # Security controls & OWASP threat mitigations
 ├── ENVIRONMENT_SETUP.md         # Neon setup & migration instructions
 └── README.md                    # Project documentation
@@ -194,11 +195,20 @@ The platform exposes an extensive REST API under `/api`. All endpoints return st
 | :--- | :--- | :--- | :--- |
 | **Organisations** | `GET` | `/api/organisations` | List chapters with filter & search |
 | | `POST` | `/api/organisations` | Create new chapter |
-| **Workshops** | `GET` | `/api/workshops` | Query workshops by status or domain |
-| | `POST` | `/api/workshops` | Create draft workshop |
-| | `POST` | `/api/workshops/:id/publish` | Publish workshop with validations |
-| | `POST` | `/api/workshops/:id/cancel` | Cancel ongoing or published workshop |
-| | `POST` | `/api/workshops/register` | Register student directly or via event code |
+| **Workshops** | `GET` | `/api/workshops` | Query workshops by category, status, difficulty |
+| | `POST` | `/api/workshops` | Create draft or published workshop |
+| | `GET` | `/api/workshops/:id` | Full workshop details & registration metrics |
+| | `PATCH` | `/api/workshops/:id` | Update metadata, capacity, schedule, status |
+| | `POST` | `/api/workshops/:id/unpublish` | Revert published workshop to Draft (safe gate) |
+| | `POST` | `/api/workshops/:id/duplicate` | Duplicate workshop to new Draft |
+| | `POST` | `/api/workshops/:id/code/regenerate` | Regenerate cryptographic event code |
+| | `PATCH` | `/api/workshops/:id/code/toggle` | Enable or disable code-based registration |
+| | `GET` | `/api/workshops/code/:code` | Rate-limited event code lookup |
+| **Registrations** | `POST` | `/api/workshops/register` | Register student directly or via event code |
+| | `DELETE` | `/api/workshops/registrations/:id` | Student self-cancel + auto-waitlist promotion |
+| | `GET` | `/api/workshops/:id/participants` | Organiser participant roster with search |
+| | `GET` | `/api/workshops/:id/participants/export` | Stream sanitized participant roster CSV |
+| | `PATCH` | `/api/workshops/:id/participants/:regId` | Approve, reject, or cancel participant |
 | **Templates** | `GET` | `/api/templates` | Catalog of lab blueprints |
 | | `POST` | `/api/templates` | Create lab template |
 | **Challenges** | `GET` | `/api/challenges` | Challenge milestones for a template |
@@ -218,6 +228,8 @@ For the complete API documentation with sample request and response payloads, se
 - **Infrastructure Masking**: Internal container IDs (`containerReference`) are stripped from all client-facing responses.
 - **Connection Isolation**: Next.js server queries route exclusively through Neon's PgBouncer connection pooler to prevent denial of service through connection exhaustion.
 - **Database Boundary**: Prisma Client is strictly server-side and credentials are never bundled into client packages.
+- **Brute-Force & Enumeration Mitigation**: Rate-limiting sliding windows guard authentication and workshop joining codes.
+- **Multi-Tenant IDOR Defenses**: Role-based access and chapter membership validation prevent cross-organisation access.
 
 ---
 
@@ -227,6 +239,7 @@ For the complete API documentation with sample request and response payloads, se
 - [x] **Prompt 2**: Frontend Foundation & Enterprise UI Design System (Organiser + Student Portals)
 - [x] **Prompt 3**: Backend Infrastructure, Neon PostgreSQL Integration & REST APIs (`DATABASE.md`, `API_DOCUMENTATION.md`, `ENVIRONMENT_SETUP.md`)
 - [x] **Prompt 4**: Authentication, Multi-Tenancy & Role-Based Access Control (`AUTHENTICATION.md`, `RBAC.md`, `SECURITY.md`)
-- [ ] **Prompt 5**: Remote Execution Plane & Isolated Docker Container Daemon
-- [ ] **Prompt 6**: Real-time Terminal, WebSockets & Automated Task Evaluation Engine
-- [ ] **Prompt 7**: Workshop Analytics, Leaderboards, Certificates & Deployment
+- [x] **Prompt 5**: Workshop & Event Management (`WORKSHOP_MANAGEMENT.md`)
+- [ ] **Prompt 6**: Remote Execution Plane & Isolated Docker Container Daemon
+- [ ] **Prompt 7**: Real-time Terminal, WebSockets & Automated Task Evaluation Engine
+- [ ] **Prompt 8**: Workshop Analytics, Leaderboards, Certificates & Deployment

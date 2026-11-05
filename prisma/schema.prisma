@@ -45,6 +45,8 @@ enum MembershipStatus {
 enum WorkshopStatus {
   DRAFT
   PUBLISHED
+  REGISTRATION_CLOSED
+  FULL
   ONGOING
   COMPLETED
   CANCELLED
@@ -52,8 +54,17 @@ enum WorkshopStatus {
 
 enum RegistrationStatus {
   REGISTERED
+  PENDING_APPROVAL
   WAITLISTED
+  REJECTED
   CANCELLED
+  ATTENDED
+}
+
+enum VenueType {
+  ONLINE
+  OFFLINE
+  HYBRID
 }
 
 enum AttendanceStatus {
@@ -188,15 +199,34 @@ model Workshop {
   organiserId          String         @map("organiser_id") @db.Uuid
   title                String
   slug                 String         @unique
+  shortDescription     String?        @map("short_description")
   description          String         @db.Text
   domain               String
+  difficulty           Difficulty     @default(BEGINNER)
   bannerUrl            String?        @map("banner_url")
+  tags                 String[]       @default([])
+
+  // Schedule & Venue
   startDate            DateTime       @map("start_date")
   endDate              DateTime       @map("end_date")
   duration             Int            // in minutes
+  timezone             String         @default("UTC")
+  venueType            VenueType      @default(ONLINE) @map("venue_type")
+  venueAddress         String?        @map("venue_address") // URL or address
+
+  // Speaker / Instructor
+  instructorName       String?        @map("instructor_name")
+  instructorBio        String?        @map("instructor_bio") @db.Text
+
+  // Registration Policies
+  registrationOpensAt  DateTime?      @map("registration_opens_at")
   registrationDeadline DateTime       @map("registration_deadline")
   participantLimit     Int            @default(50) @map("participant_limit")
+  requiresApproval     Boolean        @default(false) @map("requires_approval")
+  isPublic             Boolean        @default(true) @map("is_public")
+  codeJoinEnabled      Boolean        @default(true) @map("code_join_enabled")
   registrationCode     String         @unique @map("registration_code")
+
   status               WorkshopStatus @default(DRAFT)
   createdAt            DateTime       @default(now()) @map("created_at")
   updatedAt            DateTime       @updatedAt @map("updated_at")
@@ -224,6 +254,9 @@ model WorkshopRegistration {
   registeredAt     DateTime           @default(now()) @map("registered_at")
   status           RegistrationStatus @default(REGISTERED)
   attendanceStatus AttendanceStatus   @default(ABSENT) @map("attendance_status")
+  notes            String?            @db.Text
+  approvedAt       DateTime?          @map("approved_at")
+  cancelledAt      DateTime?          @map("cancelled_at")
 
   workshop Workshop @relation(fields: [workshopId], references: [id], onDelete: Cascade)
   student  User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -231,6 +264,7 @@ model WorkshopRegistration {
   @@unique([workshopId, studentId], name: "unique_workshop_student_registration")
   @@index([workshopId])
   @@index([studentId])
+  @@index([status])
   @@map("workshop_registrations")
 }
 

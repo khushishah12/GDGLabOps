@@ -75,6 +75,7 @@ export function Sidebar({
       items: [
         { label: 'My Dashboard', href: '/student/overview', icon: LayoutDashboard },
         { label: 'Browse Workshops', href: '/student/explore', icon: BookOpen },
+        { label: 'My Registrations', href: '/student/workshops', icon: Calendar },
         { label: 'My Labs', href: '/student/labs', icon: Terminal },
         { label: 'Interactive Sandbox', href: '/student/lab/demo-session', icon: Code2 },
         { label: 'Achievements', href: '/student/achievements', icon: Trophy },

@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { WorkshopService } from '@/lib/services/workshop.service';
 import { updateWorkshopSchema } from '@/lib/validations';
 import { apiSuccess, apiError } from '@/lib/api-response';
+import { requireWorkshopOwnership } from '@/lib/auth/rbac';
+import { getCurrentUser } from '@/lib/auth/session';
 
 export async function GET(
   req: NextRequest,
@@ -20,6 +22,11 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (user) {
+      await requireWorkshopOwnership(params.id);
+    }
+
     const body = await req.json();
     const validated = updateWorkshopSchema.parse(body);
     const updated = await WorkshopService.update(params.id, validated);
@@ -34,6 +41,11 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (user) {
+      await requireWorkshopOwnership(params.id);
+    }
+
     await WorkshopService.delete(params.id);
     return apiSuccess(null, 'Draft workshop deleted successfully');
   } catch (err) {

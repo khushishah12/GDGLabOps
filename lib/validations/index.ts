@@ -24,28 +24,60 @@ export const createOrganisationSchema = z.object({
 export const updateOrganisationSchema = createOrganisationSchema.partial();
 
 // ========================================================
+// ========================================================
 // Workshop Validations
 // ========================================================
+export const workshopCategorySchema = z.enum([
+  'Web Development',
+  'Cloud Computing',
+  'Cybersecurity',
+  'Artificial Intelligence / Machine Learning',
+  'DevOps',
+  'Open Source',
+  'Data Science',
+  'Other',
+]);
+
 export const createWorkshopSchema = z
   .object({
     organisationId: uuidSchema,
-    organiserId: uuidSchema,
+    organiserId: uuidSchema.optional(), // Inherited from authenticated session
     title: z.string().min(3, 'Title must be at least 3 characters').max(150),
     slug: slugSchema,
-    description: z.string().min(10, 'Description must be at least 10 characters'),
-    domain: z.string().min(2, 'Domain is required'),
+    shortDescription: z.string().max(250).optional(),
+    description: z.string().min(10, 'Detailed description must be at least 10 characters'),
+    domain: z.string().min(2, 'Category is required'),
+    difficulty: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']).default('BEGINNER'),
     bannerUrl: z.string().url('Banner must be a valid URL').optional().or(z.literal('')),
+    tags: z.array(z.string()).default([]),
+
+    // Schedule & Venue
     startDate: z.string().datetime({ message: 'startDate must be a valid ISO 8601 date string' }),
     endDate: z.string().datetime({ message: 'endDate must be a valid ISO 8601 date string' }),
     duration: z.coerce.number().int().positive('Duration must be positive in minutes'),
+    timezone: z.string().default('UTC'),
+    venueType: z.enum(['ONLINE', 'OFFLINE', 'HYBRID']).default('ONLINE'),
+    venueAddress: z.string().optional(),
+
+    // Speaker / Instructor
+    instructorName: z.string().max(100).optional(),
+    instructorBio: z.string().max(1000).optional(),
+
+    // Registration Settings
+    registrationOpensAt: z.string().datetime().optional().nullable(),
     registrationDeadline: z.string().datetime({ message: 'registrationDeadline must be a valid ISO date string' }),
-    participantLimit: z.coerce.number().int().min(1).max(1000).default(50),
+    participantLimit: z.coerce.number().int().min(1).max(2000).default(50),
+    requiresApproval: z.boolean().default(false),
+    isPublic: z.boolean().default(true),
+    codeJoinEnabled: z.boolean().default(true),
     registrationCode: z
       .string()
       .min(4, 'Registration code must be at least 4 characters')
-      .max(20)
-      .regex(/^[A-Z0-9_-]+$/, 'Registration code must be uppercase alphanumeric'),
+      .max(25)
+      .regex(/^[A-Z0-9_-]+$/, 'Registration code must be uppercase alphanumeric')
+      .optional(),
     labTemplateIds: z.array(uuidSchema).optional(),
+    status: z.enum(['DRAFT', 'PUBLISHED']).default('DRAFT'),
   })
   .refine((data) => new Date(data.startDate) < new Date(data.endDate), {
     message: 'Workshop start date must precede end date',
@@ -54,20 +86,44 @@ export const createWorkshopSchema = z
   .refine((data) => new Date(data.registrationDeadline) <= new Date(data.startDate), {
     message: 'Registration deadline cannot be after workshop start date',
     path: ['registrationDeadline'],
-  });
+  })
+  .refine(
+    (data) => {
+      if (data.registrationOpensAt) {
+        return new Date(data.registrationOpensAt) <= new Date(data.registrationDeadline);
+      }
+      return true;
+    },
+    {
+      message: 'Registration opening date must be on or before the registration deadline',
+      path: ['registrationOpensAt'],
+    }
+  );
 
 export const updateWorkshopSchema = z
   .object({
     title: z.string().min(3).max(150).optional(),
+    shortDescription: z.string().max(250).optional(),
     description: z.string().min(10).optional(),
     domain: z.string().min(2).optional(),
+    difficulty: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']).optional(),
     bannerUrl: z.string().url().optional().or(z.literal('')),
+    tags: z.array(z.string()).optional(),
     startDate: z.string().datetime().optional(),
     endDate: z.string().datetime().optional(),
     duration: z.coerce.number().int().positive().optional(),
+    timezone: z.string().optional(),
+    venueType: z.enum(['ONLINE', 'OFFLINE', 'HYBRID']).optional(),
+    venueAddress: z.string().optional(),
+    instructorName: z.string().max(100).optional(),
+    instructorBio: z.string().max(1000).optional(),
+    registrationOpensAt: z.string().datetime().optional().nullable(),
     registrationDeadline: z.string().datetime().optional(),
-    participantLimit: z.coerce.number().int().min(1).max(1000).optional(),
-    status: z.enum(['DRAFT', 'PUBLISHED', 'ONGOING', 'COMPLETED', 'CANCELLED']).optional(),
+    participantLimit: z.coerce.number().int().min(1).max(2000).optional(),
+    requiresApproval: z.boolean().optional(),
+    isPublic: z.boolean().optional(),
+    codeJoinEnabled: z.boolean().optional(),
+    status: z.enum(['DRAFT', 'PUBLISHED', 'REGISTRATION_CLOSED', 'FULL', 'ONGOING', 'COMPLETED', 'CANCELLED']).optional(),
   })
   .refine(
     (data) => {
@@ -79,21 +135,28 @@ export const updateWorkshopSchema = z
     { message: 'startDate must precede endDate', path: ['endDate'] }
   );
 
+export const manageParticipantSchema = z.object({
+  action: z.enum(['APPROVE', 'REJECT', 'CANCEL']),
+  notes: z.string().max(500).optional(),
+});
+
 // ========================================================
 // Workshop Registration Validations
 // ========================================================
 export const registerWorkshopSchema = z.object({
   workshopId: uuidSchema.optional(),
-  registrationCode: z.string().min(4).max(20).optional(),
-  studentId: uuidSchema,
+  registrationCode: z.string().min(4).max(30).optional(),
+  studentId: uuidSchema.optional(),
+  notes: z.string().max(500).optional(),
 }).refine((data) => data.workshopId || data.registrationCode, {
   message: 'Either workshopId or registrationCode must be provided',
   path: ['registrationCode'],
 });
 
 export const updateRegistrationStatusSchema = z.object({
-  status: z.enum(['REGISTERED', 'WAITLISTED', 'CANCELLED']),
+  status: z.enum(['REGISTERED', 'PENDING_APPROVAL', 'WAITLISTED', 'REJECTED', 'CANCELLED', 'ATTENDED']),
   attendanceStatus: z.enum(['ABSENT', 'ATTENDED', 'EXCUSED']).optional(),
+  notes: z.string().max(500).optional(),
 });
 
 // ========================================================

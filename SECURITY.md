@@ -46,3 +46,16 @@ npx tsx --env-file=.env scripts/create-super-admin.ts --name="Admin Name" --emai
 1. **In-Memory Rate Limiting**: The current rate limiter runs in-process memory. When horizontally scaling the Next.js control plane across multiple serverless Vercel nodes, rate limiting will be migrated to an external Redis / Upstash KV store.
 2. **Multi-Factor Authentication (MFA)**: WebAuthn / Passkey support is planned for Prompt 7 to allow organisers and admins to authenticate with hardware security keys.
 3. **Audit Logging Delivery**: Security events are currently logged locally; external syslog / Google Cloud Cloud Logging streaming will be integrated during production deployment.
+
+---
+
+## 4. Workshop & Event Management Security Protections (Prompt 5)
+
+| Protection Layer | Threat Vector | Technical Mitigation |
+| :--- | :--- | :--- |
+| **Joining Code Brute Force** | Automated dictionary attacks against `/api/workshops/code/:code` | Sliding-window IP rate limiter (`10 requests / 5 minutes`). Returns `429 Too Many Requests` on breach. |
+| **Joining Code Ambiguity** | Students misreading alphanumeric tokens (`0` vs `O`, `1` vs `I`) | Custom 31-char alphabet (`23456789ABCDEFGHJKLMNPQRSTUVWXYZ`) via `crypto.randomInt`. |
+| **Race Conditions at Capacity** | Concurrent students registering for the last seat simultaneously | All registration state checks and capacity counts run inside atomic `prisma.$transaction` locks. |
+| **Session Rug-Pull / Disruption** | Organiser unpublishing an event after students have registered | Strict constraint blocking unpublish if `confirmedRegistrations > 0`. |
+| **CSV Formula Injection (CSV-i)** | Malicious student names (`=cmd|' /C ...'!A0`) executing code in Excel | Participant CSV exporter sanitizes cells, strips control tokens, and wraps all values in safe delimiters. |
+| **Audit Trail Tampering** | Denial of organiser approval/cancellation actions | Status changes write immutable records to the `AuditLog` table with actor ID and previous/new status. |

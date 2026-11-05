@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useUser } from '@/lib/user-context';
 import { useToast } from '@/lib/toast-context';
-import { mockWorkshops, mockLabTemplates } from '@/lib/mock-data';
 import {
   Trophy,
   Terminal,
@@ -20,6 +19,8 @@ import {
   Clock,
   Play,
   Zap,
+  RefreshCw,
+  Hourglass,
 } from 'lucide-react';
 
 export default function StudentOverviewPage() {
@@ -30,55 +31,69 @@ export default function StudentOverviewPage() {
     enrolledCount: number;
     solvedCount: number;
   }>({
-    points: currentUser.points || 850,
-    enrolledCount: 3,
+    points: 850,
+    enrolledCount: 0,
     solvedCount: 14,
   });
+  const [enrolledWorkshops, setEnrolledWorkshops] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    async function loadProfile() {
+    async function loadData() {
+      setIsLoading(true);
       try {
-        const res = await fetch('/api/student/profile');
-        if (res.ok) {
-          const json = await res.json();
-          if (json.success && json.data) {
+        const [profileRes, wsRes] = await Promise.all([
+          fetch(`/api/student/profile?studentId=${currentUser.id}`),
+          fetch(`/api/student/workshops?studentId=${currentUser.id}`),
+        ]);
+
+        if (profileRes.ok) {
+          const profileJson = await profileRes.json();
+          if (profileJson.success && profileJson.data) {
             setProfileData({
-              points: json.data.totalPoints || currentUser.points || 850,
-              enrolledCount: json.data.enrolledWorkshopsCount ?? 3,
-              solvedCount: json.data.solvedChallengesCount ?? 14,
+              points: profileJson.data.totalPoints || 850,
+              enrolledCount: profileJson.data.enrolledWorkshopsCount ?? 0,
+              solvedCount: profileJson.data.solvedChallengesCount ?? 14,
             });
           }
         }
-      } catch (err) {
-        // Fallback to initial values
+
+        if (wsRes.ok) {
+          const wsJson = await wsRes.json();
+          if (wsJson.success && Array.isArray(wsJson.data)) {
+            setEnrolledWorkshops(wsJson.data);
+          }
+        }
+      } catch {
+        // Fallback
+      } finally {
+        setIsLoading(false);
       }
     }
-    loadProfile();
-  }, [currentUser.points]);
-
-  const enrolledWorkshops = mockWorkshops.slice(0, 2);
+    loadData();
+  }, [currentUser.id]);
 
   const stats = [
     {
       title: 'Enrolled Workshops',
-      value: profileData.enrolledCount.toString(),
+      value: enrolledWorkshops.length.toString(),
       sub: 'Active study jams',
       icon: Calendar,
       color: 'text-[#4285F4]',
       bg: 'bg-blue-500/10',
     },
     {
-      title: 'Active Labs',
-      value: '1',
-      sub: 'Linux & Cloud Shell',
+      title: 'Active Sandboxes',
+      value: enrolledWorkshops.filter((w) => w.status === 'REGISTERED').length.toString(),
+      sub: 'Ready for hands-on labs',
       icon: Terminal,
       color: 'text-[#34A853]',
       bg: 'bg-green-500/10',
     },
     {
-      title: 'Completed Challenges',
+      title: 'Completed Tasks',
       value: profileData.solvedCount.toString(),
-      sub: 'Across active workshops',
+      sub: 'Across practical labs',
       icon: CheckCircle2,
       color: 'text-[#FBBC04]',
       bg: 'bg-yellow-500/10',
@@ -86,7 +101,7 @@ export default function StudentOverviewPage() {
     {
       title: 'Total Points',
       value: profileData.points.toString(),
-      sub: 'Top 5% in Chapter',
+      sub: 'Chapter Leaderboard',
       icon: Trophy,
       color: 'text-[#EA4335]',
       bg: 'bg-red-500/10',
@@ -102,26 +117,33 @@ export default function StudentOverviewPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6">
+      <div className="space-y-6 pb-12">
         {/* Welcome Banner */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-6 rounded-2xl border border-blue-500/20 bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-transparent">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <Badge variant="default" size="sm">Student Learning Portal</Badge>
+              <Badge variant="default" size="sm">
+                Student Learning Portal
+              </Badge>
               <span className="text-xs text-slate-400">GDG on Campus Chapter</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
               Welcome back, {currentUser.name}!
             </h1>
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              Continue your hands-on journey. Your active container session is pre-warmed and ready to resume.
+              Continue your hands-on journey. Explore active study jams or launch your interactive sandbox.
             </p>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <Link href="/student/explore">
+              <Button size="sm" variant="outline" className="text-xs">
+                Explore Workshops
+              </Button>
+            </Link>
             <Link href="/student/lab/demo-session">
               <Button size="sm" className="bg-[#1a73e8] hover:bg-[#1557b0] dark:bg-[#4285F4] text-xs" leftIcon={<Play className="w-3.5 h-3.5" />}>
-                Resume Active Lab
+                Launch Sandbox
               </Button>
             </Link>
           </div>
@@ -150,7 +172,7 @@ export default function StudentOverviewPage() {
           })}
         </div>
 
-        {/* Two Columns: Active Labs / Enrolled Workshops & Achievements */}
+        {/* Two Columns: Enrolled Workshops & Badges */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Enrolled Workshops */}
           <Card className="lg:col-span-8">
@@ -158,60 +180,86 @@ export default function StudentOverviewPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>My Active & Enrolled Workshops</CardTitle>
-                  <CardDescription>Track your progress across hands-on study jams</CardDescription>
+                  <CardDescription>Directly registered sessions and waitlist positions</CardDescription>
                 </div>
-                <Link href="/student/explore" className="text-xs text-[#1a73e8] dark:text-[#4285F4] hover:underline flex items-center">
-                  Browse more <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
+                <Link href="/student/workshops" className="text-xs text-[#1a73e8] dark:text-[#4285F4] hover:underline flex items-center">
+                  Manage all <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
                 </Link>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {enrolledWorkshops.map((ws, idx) => (
-                <div
-                  key={ws.id}
-                  className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                >
-                  <div className="space-y-1.5 flex-1">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="domain" size="sm">{ws.domain}</Badge>
-                      <Badge variant={ws.status === 'ACTIVE' ? 'success' : 'default'} size="sm">
-                        {ws.status === 'ACTIVE' ? 'Live Session In Progress' : 'Upcoming'}
-                      </Badge>
-                    </div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                      {ws.title}
-                    </h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
-                      {ws.description}
-                    </p>
-
-                    {/* Progress Bar */}
-                    <div className="pt-2 max-w-sm space-y-1">
-                      <div className="flex justify-between text-[11px] text-slate-500">
-                        <span>Milestone Progress</span>
-                        <span className="font-semibold">{idx === 0 ? '75% (3/4 Solved)' : '0%'}</span>
-                      </div>
-                      <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                        <div
-                          className="bg-emerald-500 h-full rounded-full transition-all"
-                          style={{ width: idx === 0 ? '75%' : '0%' }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="shrink-0 flex sm:flex-col items-center sm:items-end gap-2">
-                    <Link href="/student/lab/demo-session">
-                      <Button size="sm" className="text-xs">
-                        {idx === 0 ? 'Resume Sandbox' : 'View Schedule'}
-                      </Button>
-                    </Link>
-                    <span className="text-[10px] text-slate-400">
-                      Event Code: <code className="font-mono">{ws.eventCode}</code>
-                    </span>
-                  </div>
+              {enrolledWorkshops.length === 0 ? (
+                <div className="p-8 text-center space-y-3">
+                  <Calendar className="w-8 h-8 text-slate-400 mx-auto" />
+                  <p className="text-xs text-slate-500">
+                    You have not enrolled in any workshops yet. Check out available study jams!
+                  </p>
+                  <Link href="/student/explore">
+                    <Button size="sm" className="text-xs">
+                      Explore Workshops
+                    </Button>
+                  </Link>
                 </div>
-              ))}
+              ) : (
+                enrolledWorkshops.map((record) => {
+                  const ws = record.workshop || record;
+                  return (
+                    <div
+                      key={record.id}
+                      className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    >
+                      <div className="space-y-1.5 flex-1">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="domain" size="sm">
+                            {ws.domain}
+                          </Badge>
+                          <Badge
+                            variant={record.status === 'REGISTERED' ? 'success' : record.status === 'WAITLISTED' ? 'warning' : 'secondary'}
+                            size="sm"
+                          >
+                            {record.status === 'REGISTERED' ? 'Confirmed Seat' : record.status === 'WAITLISTED' ? 'Waitlist' : 'Pending'}
+                          </Badge>
+                        </div>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                          {ws.title}
+                        </h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
+                          {ws.shortDescription || ws.description}
+                        </p>
+
+                        <div className="flex items-center gap-3 text-[11px] text-slate-400 pt-1">
+                          <span>
+                            Date: {new Date(ws.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                          </span>
+                          <span>•</span>
+                          <span>Duration: {ws.duration}m</span>
+                          <span>•</span>
+                          <span>Code: <code className="font-mono">{ws.registrationCode}</code></span>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 flex sm:flex-col items-center sm:items-end gap-2">
+                        {record.status === 'REGISTERED' ? (
+                          <Link href="/student/lab/demo-session">
+                            <Button size="sm" className="text-xs">
+                              Launch Sandbox
+                            </Button>
+                          </Link>
+                        ) : (
+                          <div className="text-[11px] text-amber-500 font-semibold">
+                            {record.status === 'WAITLISTED' ? 'Waitlist Position #1' : 'Awaiting Approval'}
+                          </div>
+                        )}
+                        <Link href="/student/workshops">
+                          <Button variant="ghost" size="sm" className="text-xs h-7 text-slate-400">
+                            Details
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </CardContent>
           </Card>
 

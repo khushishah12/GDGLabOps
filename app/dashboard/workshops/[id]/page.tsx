@@ -1,17 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { AppShell } from '@/components/layout/app-shell';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { useToast } from '@/lib/toast-context';
-import { mockWorkshops, mockLabTemplates } from '@/lib/mock-data';
 import {
   ArrowLeft,
   Calendar,
@@ -28,36 +27,177 @@ import {
   Layers,
   Sparkles,
   Trophy,
+  RefreshCw,
+  MapPin,
+  Video,
+  Globe,
+  User,
+  ShieldCheck,
+  Ban,
 } from 'lucide-react';
 
 export default function WorkshopDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { success, info } = useToast();
+  const { success, error, info } = useToast();
 
-  const workshopId = (params?.id as string) || 'ws-1';
-  const workshop = mockWorkshops.find((w) => w.id === workshopId) || mockWorkshops[0];
-  const template = workshop.template || mockLabTemplates[0];
+  const workshopId = (params?.id as string) || '';
+  const [workshop, setWorkshop] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
+  // Edit Modal State
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editTitle, setEditTitle] = useState(workshop.title);
-  const [editCapacity, setEditCapacity] = useState(workshop.maxAttendees.toString());
+  const [editTitle, setEditTitle] = useState('');
+  const [editShortDesc, setEditShortDesc] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editCapacity, setEditCapacity] = useState('50');
+  const [editInstructor, setEditInstructor] = useState('');
+  const [editInstructorBio, setEditInstructorBio] = useState('');
+  const [editVenueAddress, setEditVenueAddress] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const fetchWorkshop = async () => {
+    if (!workshopId) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/workshops/${workshopId}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          setWorkshop(json.data);
+          setEditTitle(json.data.title);
+          setEditShortDesc(json.data.shortDescription || '');
+          setEditDescription(json.data.description);
+          setEditCapacity(json.data.participantLimit?.toString() || '50');
+          setEditInstructor(json.data.instructorName || '');
+          setEditInstructorBio(json.data.instructorBio || '');
+          setEditVenueAddress(json.data.venueAddress || '');
+        }
+      }
+    } catch (err: any) {
+      error('Fetch Error', 'Failed to retrieve workshop details.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWorkshop();
+  }, [workshopId]);
 
   const handleCopyCode = () => {
-    navigator.clipboard.writeText(workshop.eventCode);
-    success('Event Code Copied!', `${workshop.eventCode} copied to clipboard.`);
+    if (!workshop?.registrationCode) return;
+    navigator.clipboard.writeText(workshop.registrationCode);
+    success('Event Code Copied!', `${workshop.registrationCode} copied to clipboard.`);
   };
 
-  const handleSaveEdit = () => {
-    workshop.title = editTitle;
-    workshop.maxAttendees = parseInt(editCapacity) || workshop.maxAttendees;
-    setIsEditOpen(false);
-    success('Workshop Updated', 'Changes saved successfully.');
+  const handleRegenerateCode = async () => {
+    try {
+      const res = await fetch(`/api/workshops/${workshopId}/code/regenerate`, {
+        method: 'POST',
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        success('New Code Generated', `Code updated to: ${json.data.registrationCode}`);
+        fetchWorkshop();
+      } else {
+        error('Error', json.error || 'Failed to regenerate code');
+      }
+    } catch (err: any) {
+      error('Error', err.message);
+    }
   };
+
+  const handleToggleCodeJoin = async () => {
+    try {
+      const res = await fetch(`/api/workshops/${workshopId}/code/toggle`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !workshop.codeJoinEnabled }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        info('Code Joining Updated', `Code joining is now ${!workshop.codeJoinEnabled ? 'enabled' : 'disabled'}`);
+        fetchWorkshop();
+      } else {
+        error('Error', json.error || 'Failed to toggle code join setting');
+      }
+    } catch (err: any) {
+      error('Error', err.message);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    setIsSaving(true);
+    try {
+      const res = await fetch(`/api/workshops/${workshopId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          shortDescription: editShortDesc.trim() || undefined,
+          description: editDescription.trim(),
+          participantLimit: parseInt(editCapacity) || workshop.participantLimit,
+          instructorName: editInstructor.trim() || undefined,
+          instructorBio: editInstructorBio.trim() || undefined,
+          venueAddress: editVenueAddress.trim() || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        success('Workshop Updated', 'Changes saved successfully.');
+        setIsEditOpen(false);
+        fetchWorkshop();
+      } else {
+        error('Update Failed', json.error || 'Failed to update workshop');
+      }
+    } catch (err: any) {
+      error('Error', err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePublish = async () => {
+    try {
+      const res = await fetch(`/api/workshops/${workshopId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'PUBLISHED' }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        success('Workshop Published 🚀', 'Students can now register.');
+        fetchWorkshop();
+      } else {
+        error('Publishing Error', json.error || 'Could not publish');
+      }
+    } catch (err: any) {
+      error('Error', err.message);
+    }
+  };
+
+  if (isLoading || !workshop) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="flex flex-col items-center gap-2">
+            <RefreshCw className="w-6 h-6 animate-spin text-[#4285F4]" />
+            <span className="text-xs text-slate-500">Loading workshop data...</span>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  const confirmedCount = workshop.confirmedRegistrations ?? 0;
+  const waitlistedCount = workshop.waitlistedRegistrations ?? 0;
+  const pendingCount = workshop.pendingApprovalRegistrations ?? 0;
+  const capacityPct = Math.min(100, Math.round((confirmedCount / (workshop.participantLimit || 1)) * 100));
 
   return (
     <AppShell>
-      <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="space-y-6 max-w-6xl mx-auto pb-12">
         {/* Navigation & Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -68,13 +208,20 @@ export default function WorkshopDetailPage() {
             </Link>
             <div>
               <div className="flex items-center gap-2">
-                <Badge variant="domain" size="sm">{workshop.domain}</Badge>
+                <Badge variant="domain" size="sm">
+                  {workshop.domain}
+                </Badge>
                 <Badge
-                  variant={workshop.status === 'ACTIVE' ? 'success' : 'default'}
+                  variant={workshop.status === 'PUBLISHED' ? 'default' : workshop.status === 'ONGOING' ? 'success' : 'secondary'}
                   size="sm"
                 >
                   {workshop.status}
                 </Badge>
+                {workshop.difficulty && (
+                  <Badge variant="outline" size="sm">
+                    {workshop.difficulty}
+                  </Badge>
+                )}
               </div>
               <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 mt-1">
                 {workshop.title}
@@ -83,175 +230,203 @@ export default function WorkshopDetailPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {workshop.status === 'DRAFT' && (
+              <Button size="sm" onClick={handlePublish} className="text-xs bg-[#1a73e8] hover:bg-[#1557b0]">
+                Publish Workshop
+              </Button>
+            )}
+            <Link href={`/dashboard/workshops/${workshop.id}/participants`}>
+              <Button size="sm" variant="outline" className="text-xs" leftIcon={<Users className="w-3.5 h-3.5" />}>
+                Manage Participants ({confirmedCount})
+              </Button>
+            </Link>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsEditOpen(true)}
               leftIcon={<Settings className="w-3.5 h-3.5" />}
             >
-              Edit Details
+              Edit
             </Button>
-            <Link href="/dashboard/monitor">
-              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" leftIcon={<Play className="w-3.5 h-3.5" />}>
-                Launch Live Monitor
-              </Button>
-            </Link>
           </div>
         </div>
 
-        {/* Highlight Card: Registration Code & Quick Telemetry */}
+        {/* Highlight Card: Registration Code & Key Telemetry */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
           <Card className="md:col-span-8 p-6 flex flex-col justify-between">
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                   Registration Event Code
                 </span>
-                <span className="text-[11px] text-slate-400">Share with students</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-500">
+                    Code Joining: {workshop.codeJoinEnabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs h-6 px-1.5"
+                    onClick={handleToggleCodeJoin}
+                  >
+                    Toggle
+                  </Button>
+                </div>
               </div>
 
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-900/40">
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-900/40">
                 <span className="font-mono text-2xl sm:text-3xl font-extrabold tracking-wider text-[#1a73e8] dark:text-[#4285F4]">
-                  {workshop.eventCode}
+                  {workshop.registrationCode}
                 </span>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={handleCopyCode}
-                  leftIcon={<Copy className="w-3.5 h-3.5" />}
-                  className="ml-auto text-xs"
-                >
-                  Copy Code
-                </Button>
+                <div className="ml-auto flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleCopyCode}
+                    leftIcon={<Copy className="w-3.5 h-3.5" />}
+                    className="text-xs"
+                  >
+                    Copy Code
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRegenerateCode}
+                    leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+                    className="text-xs"
+                    title="Regenerate code"
+                  >
+                    Regenerate
+                  </Button>
+                </div>
               </div>
 
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed pt-1">
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                 {workshop.description}
               </p>
             </div>
 
+            {/* Metrics Breakdown */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-100 dark:border-slate-800/80 mt-4 text-xs">
               <div>
-                <span className="text-slate-400 block text-[10px] uppercase">Registered</span>
+                <span className="text-slate-400 block text-[10px] uppercase">Enrolled</span>
                 <span className="font-semibold text-sm">
-                  {workshop.registeredCount} / {workshop.maxAttendees}
+                  {confirmedCount} / {workshop.participantLimit}
+                </span>
+                <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1 mt-1 overflow-hidden">
+                  <div className="bg-[#4285F4] h-full rounded-full" style={{ width: `${capacityPct}%` }} />
+                </div>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase">Waitlisted</span>
+                <span className="font-semibold text-sm text-amber-500">
+                  {waitlistedCount} Students
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase">Pending Approval</span>
+                <span className="font-semibold text-sm text-blue-500">
+                  {pendingCount} Students
                 </span>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase">Duration</span>
-                <span className="font-semibold text-sm">{workshop.durationMinutes} minutes</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase">Organiser</span>
-                <span className="font-semibold text-sm">{workshop.organiserName}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase">Challenges</span>
-                <span className="font-semibold text-sm">{workshop.challenges.length || 4} Tasks</span>
+                <span className="font-semibold text-sm">{workshop.duration} minutes</span>
               </div>
             </div>
           </Card>
 
-          {/* Lab Template & Environment Spec Card */}
-          <Card className="md:col-span-4 p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Attached Environment
-              </span>
-              <Badge variant="outline" size="sm">Docker Sandbox</Badge>
-            </div>
-
-            <div className="space-y-1">
-              <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">
-                {template.title}
-              </h4>
-              <p className="text-[11px] text-slate-400 leading-normal">
-                {template.description}
-              </p>
-            </div>
-
-            <div className="rounded-lg bg-slate-50 dark:bg-slate-900/60 p-3 border border-slate-200/60 dark:border-slate-800 space-y-2 text-xs font-mono">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-slate-500">Image:</span>
-                <span className="text-slate-700 dark:text-slate-300 truncate max-w-[150px]">
-                  {template.dockerImage}
+          {/* Session Spec & Logistics Card */}
+          <Card className="md:col-span-4 p-5 space-y-4 flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Workshop Logistics
                 </span>
+                <Badge variant="outline" size="sm">
+                  {workshop.venueType}
+                </Badge>
               </div>
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-slate-500">Resources:</span>
-                <span className="text-slate-700 dark:text-slate-300">
-                  {template.cpuLimitCores} CPU • {template.memoryLimitMb}MB RAM
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-slate-500">Port:</span>
-                <span className="text-slate-700 dark:text-slate-300">{template.defaultPort} (WebTTY)</span>
+
+              <div className="space-y-2 text-xs">
+                <div className="flex items-start gap-2">
+                  <Calendar className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold block text-slate-800 dark:text-slate-200">
+                      {new Date(workshop.startDate).toLocaleDateString(undefined, {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      {new Date(workshop.startDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({workshop.timezone || 'UTC'})
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <Clock className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold block text-slate-800 dark:text-slate-200">
+                      Registration Deadline
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      {new Date(workshop.registrationDeadline).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+
+                {workshop.venueAddress && (
+                  <div className="flex items-start gap-2">
+                    {workshop.venueType === 'ONLINE' ? (
+                      <Video className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                    ) : (
+                      <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                    )}
+                    <div className="min-w-0">
+                      <span className="font-semibold block text-slate-800 dark:text-slate-200">
+                        {workshop.venueType === 'ONLINE' ? 'Virtual Stream' : 'Physical Location'}
+                      </span>
+                      <span className="text-[11px] text-slate-500 truncate block">
+                        {workshop.venueAddress}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {workshop.instructorName && (
+                  <div className="flex items-start gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                    <User className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold block text-slate-800 dark:text-slate-200">
+                        {workshop.instructorName}
+                      </span>
+                      {workshop.instructorBio && (
+                        <span className="text-[11px] text-slate-400 block line-clamp-2">
+                          {workshop.instructorBio}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
-            <Link href={`/student/lab/demo-session`}>
-              <Button size="sm" variant="outline" className="w-full text-xs" leftIcon={<Terminal className="w-3.5 h-3.5" />}>
-                Test Run Environment
+            <Link href={`/dashboard/workshops/${workshop.id}/participants`}>
+              <Button size="sm" variant="outline" className="w-full text-xs" leftIcon={<Users className="w-3.5 h-3.5" />}>
+                View Participant Roster & CSV
               </Button>
             </Link>
           </Card>
         </div>
 
-        {/* Interactive Challenges Section */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Milestone Challenges & Tasks</CardTitle>
-                <CardDescription>
-                  Automated grading challenges students will solve during this workshop.
-                </CardDescription>
-              </div>
-              <Badge variant="success" size="sm">
-                Total Points: 700
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {workshop.challenges.map((ch, idx) => (
-                <div key={ch.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 font-mono text-xs font-bold text-slate-500">
-                        {idx + 1}
-                      </span>
-                      <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                        {ch.title}
-                      </h4>
-                      <Badge variant="outline" size="sm">
-                        {ch.evaluationType}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 pl-7">
-                      {ch.description}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-3 shrink-0 pl-7 sm:pl-0">
-                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                      +{ch.points} pts
-                    </span>
-                    <Badge variant="secondary" size="sm">
-                      {ch.difficulty}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Edit Modal */}
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogHeader>
-            <DialogTitle>Edit Workshop</DialogTitle>
-            <DialogDescription>Modify workshop capacity and title.</DialogDescription>
+            <DialogTitle>Edit Workshop Details</DialogTitle>
+            <DialogDescription>Modify core parameters and participant limits.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <Input
@@ -260,17 +435,45 @@ export default function WorkshopDetailPage() {
               onChange={(e) => setEditTitle(e.target.value)}
             />
             <Input
-              type="number"
-              label="Participant Limit"
-              value={editCapacity}
-              onChange={(e) => setEditCapacity(e.target.value)}
+              label="Short Summary"
+              value={editShortDesc}
+              onChange={(e) => setEditShortDesc(e.target.value)}
+            />
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                Detailed Description
+              </label>
+              <textarea
+                rows={4}
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-700/80 bg-white dark:bg-slate-900/80 p-2.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#4285F4]/20"
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input
+                type="number"
+                label="Participant Limit"
+                value={editCapacity}
+                onChange={(e) => setEditCapacity(e.target.value)}
+              />
+              <Input
+                label="Instructor Name"
+                value={editInstructor}
+                onChange={(e) => setEditInstructor(e.target.value)}
+              />
+            </div>
+            <Input
+              label="Venue Address / Link"
+              value={editVenueAddress}
+              onChange={(e) => setEditVenueAddress(e.target.value)}
             />
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setIsEditOpen(false)}>
               Cancel
             </Button>
-            <Button size="sm" onClick={handleSaveEdit}>
+            <Button size="sm" isLoading={isSaving} onClick={handleSaveEdit}>
               Save Changes
             </Button>
           </DialogFooter>
