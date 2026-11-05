@@ -1,4 +1,5 @@
 import { PrismaClient, Role, OrganisationRole, Difficulty, EvaluationType, WorkshopStatus } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -19,12 +20,14 @@ async function main() {
   console.log(`[Seed]: Organisation verified -> "${organisation.name}" (${organisation.id})`);
 
   // 2. Seed Sample Organiser
+  const organiserPasswordHash = await bcrypt.hash('Organiser@Pass2026!', 12);
   const organiser = await prisma.user.upsert({
     where: { email: 'alex.rivera@gdgcampus.dev' },
-    update: {},
+    update: { passwordHash: organiserPasswordHash },
     create: {
       name: 'Alex Rivera',
       email: 'alex.rivera@gdgcampus.dev',
+      passwordHash: organiserPasswordHash,
       role: Role.ORGANISER,
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
     },
@@ -54,14 +57,16 @@ async function main() {
     { name: 'Aisha Al-Mansoor', email: 'aisha.m@university.edu', avatar: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150' },
   ];
 
+  const studentPasswordHash = await bcrypt.hash('Student@Pass2026!', 12);
   const students = [];
   for (const s of studentsData) {
     const student = await prisma.user.upsert({
       where: { email: s.email },
-      update: {},
+      update: { passwordHash: studentPasswordHash },
       create: {
         name: s.name,
         email: s.email,
+        passwordHash: studentPasswordHash,
         avatar: s.avatar,
         role: Role.STUDENT,
       },

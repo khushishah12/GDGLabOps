@@ -115,7 +115,7 @@ Access Prisma Studio at `http://localhost:5555`.
 
 ---
 
-## 5. Seeding Demo Workshop Data
+## 5. Seeding Demo Workshop Data & Accounts
 
 We provide an idempotent seed script that populates realistic developer workshops, lab blueprints, structured challenge tasks, and student accounts.
 
@@ -124,53 +124,48 @@ Run the seed script:
 npm run prisma:seed
 ```
 
-### What gets seeded:
-- **1 Organisation**: `GDG on Campus Silicon Valley` (slug: `gdg-silicon-valley`)
-- **Users**:
-  - `admin@gdgcampus.dev` (Super Admin)
-  - `sarah.connor@gdgcampus.dev` (Organiser)
-  - `alex.chen@student.gdg.dev`, `priya.patel@student.gdg.dev`, `marcus.vance@student.gdg.dev` (Students)
-- **3 Lab Templates**:
-  - `Docker & Container Basics` (DevOps & Containers, Beginner)
-  - `Kubernetes Production Pod Networking` (Cloud Native, Intermediate)
-  - `Linux Security & System Hardening` (Cybersecurity, Advanced)
-- **3 Workshops**:
-  - `Cloud Native Microservices with Docker & Kubernetes` (Code: `GDG-K8S-2026`, Status: `PUBLISHED`)
-  - `Zero Trust Security & Incident Response` (Code: `GDG-SEC-2026`, Status: `PUBLISHED`)
-  - `Next.js 15 Full-Stack Micro-Frontends` (Code: `GDG-NEXT-2026`, Status: `DRAFT`)
-- **Sample Registrations, Progress Records, and Achievements**.
+### Preconfigured Demo Accounts:
+After running the seeder, the following test accounts are ready for immediate login:
 
-> [!TIP]
-> The seed script uses `upsert` queries keyed on unique slugs and emails. You can run it multiple times safely without duplicate key violations.
+| Role | Email | Password | Portal Landing |
+| :--- | :--- | :--- | :--- |
+| **Organiser** | `alex.rivera@gdgcampus.dev` | `Organiser@Pass2026!` | `/dashboard/overview` |
+| **Student** | `elena.rostova@student.gdg.dev` | `Student@Pass2026!` | `/student/overview` |
+| **Student** | `marcus.chen@student.gdg.dev` | `Student@Pass2026!` | `/student/overview` |
+| **Student** | `aisha.patel@student.gdg.dev` | `Student@Pass2026!` | `/student/overview` |
 
 ---
 
-## 6. Running the Backend Test Suite
+## 6. Provisioning the Initial Super Administrator
 
-To verify that schema validation, registration rules, session state machine transitions, and error classification logic are functioning correctly:
+Super Admin privileges cannot be assigned through the registration form. Use the trusted server-side provisioning script:
 
+```bash
+npx tsx --env-file=.env scripts/create-super-admin.ts --name="Super Admin" --email="admin@gdgcampus.dev" --password="Admin@SecurePass2026!"
+```
+
+The script will automatically hash the password with bcrypt (12 salt rounds) and activate the account with `Role.SUPER_ADMIN`.
+
+---
+
+## 7. Running Backend & Authentication Test Suites
+
+Run the test suites to verify system integrity:
+
+### 1. Database & Schema Invariant Tests:
 ```bash
 npx tsx scripts/test-backend.ts
 ```
 
-Expected output:
+### 2. Authentication, Rate Limiting & RBAC Tests:
+```bash
+npx tsx scripts/test-auth.ts
 ```
-====================================================
-🧪 GDG LabOps Backend & Validation Test Suite
-====================================================
-[Suite 1]: Workshop Validation Rules
-  ✓ PASS: Valid workshop passes schema validation
-  ✓ PASS: Rejects workshop where endDate precedes startDate
-  ✓ PASS: Rejects workshop where registrationDeadline is after startDate
-...
-====================================================
-📊 Test Results: 17 passed, 0 failed
-====================================================
-```
+Expected output: **34 passed, 0 failed** across password hashing, brute-force rate limits, registration validation, and multi-tenant IDOR checks.
 
 ---
 
-## 7. Starting the Next.js Platform
+## 8. Starting the Next.js Platform
 
 Start the development server:
 ```bash

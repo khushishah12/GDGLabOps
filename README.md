@@ -177,6 +177,9 @@ d:/projects/GDGLABOPS/
 ├── ARCHITECTURE.md              # System design & phased roadmap
 ├── DATABASE.md                  # Comprehensive database schema guide
 ├── API_DOCUMENTATION.md         # Full REST API specification
+├── AUTHENTICATION.md            # Auth.js flows, session cookies & password hashing
+├── RBAC.md                      # Role hierarchy, permissions & IDOR defenses
+├── SECURITY.md                  # Security controls & OWASP threat mitigations
 ├── ENVIRONMENT_SETUP.md         # Neon setup & migration instructions
 └── README.md                    # Project documentation
 ```
@@ -223,7 +226,7 @@ For the complete API documentation with sample request and response payloads, se
 - [x] **Prompt 1**: System Architecture & Technology Planning (`ARCHITECTURE.md`)
 - [x] **Prompt 2**: Frontend Foundation & Enterprise UI Design System (Organiser + Student Portals)
 - [x] **Prompt 3**: Backend Infrastructure, Neon PostgreSQL Integration & REST APIs (`DATABASE.md`, `API_DOCUMENTATION.md`, `ENVIRONMENT_SETUP.md`)
-- [ ] **Prompt 4**: Authentication, Multi-Tenancy & Role-Based Access Control (NextAuth.js v5 / Auth.js)
+- [x] **Prompt 4**: Authentication, Multi-Tenancy & Role-Based Access Control (`AUTHENTICATION.md`, `RBAC.md`, `SECURITY.md`)
 - [ ] **Prompt 5**: Remote Execution Plane & Isolated Docker Container Daemon
 - [ ] **Prompt 6**: Real-time Terminal, WebSockets & Automated Task Evaluation Engine
 - [ ] **Prompt 7**: Workshop Analytics, Leaderboards, Certificates & Deployment

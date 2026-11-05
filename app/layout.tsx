@@ -3,6 +3,7 @@ import './globals.css';
 import { ThemeProvider } from '@/lib/theme-provider';
 import { ToastProvider } from '@/lib/toast-context';
 import { UserProvider } from '@/lib/user-context';
+import { SessionProvider } from '@/components/auth/session-provider';
 
 export const metadata: Metadata = {
   title: 'GDG LabOps – Technical Workshop Infrastructure Platform',
@@ -41,11 +42,13 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-white dark:bg-[#090d16] font-sans antialiased selection:bg-[#4285F4]/30 selection:text-[#4285F4]">
         <ThemeProvider defaultTheme="dark" storageKey="gdg-labops-theme">
-          <UserProvider>
-            <ToastProvider>
-              {children}
-            </ToastProvider>
-          </UserProvider>
+          <SessionProvider>
+            <UserProvider>
+              <ToastProvider>
+                {children}
+              </ToastProvider>
+            </UserProvider>
+          </SessionProvider>
         </ThemeProvider>
       </body>
     </html>

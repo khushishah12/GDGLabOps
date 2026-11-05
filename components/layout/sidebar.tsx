@@ -199,7 +199,7 @@ export function Sidebar({
           >
             <div className="relative">
               <img
-                src={currentUser.avatarUrl}
+                src={currentUser.avatarUrl || currentUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=96'}
                 alt={currentUser.name}
                 className="h-7 w-7 rounded-full object-cover border border-slate-300 dark:border-slate-700 shrink-0"
               />

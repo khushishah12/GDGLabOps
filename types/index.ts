@@ -33,6 +33,7 @@ export interface User {
   email: string;
   role: UserRole;
   avatarUrl?: string;
+  avatar?: string | null;
   institution?: string;
   points?: number;
   completedLabs?: number;

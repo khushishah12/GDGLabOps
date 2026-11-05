@@ -31,7 +31,7 @@ interface TopbarProps {
 export function Topbar({ onToggleMobile }: TopbarProps) {
   const pathname = usePathname();
   const { theme, setTheme, isDark } = useTheme();
-  const { currentUser, setRole } = useUser();
+  const { currentUser, setRole, isAuthenticated, logout } = useUser();
   const { info, success } = useToast();
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -209,7 +209,7 @@ export function Topbar({ onToggleMobile }: TopbarProps) {
                 label: 'Sign Out',
                 danger: true,
                 icon: <LogOut className="w-3.5 h-3.5" />,
-                onClick: () => info('Signed Out', 'Simulation mode active.'),
+                onClick: () => logout(),
               },
             ]}
           />
