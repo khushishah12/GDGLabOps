@@ -180,6 +180,10 @@ d:/projects/GDGLABOPS/
 ├── AUTHENTICATION.md            # Auth.js flows, session cookies & password hashing
 ├── RBAC.md                      # Role hierarchy, permissions & IDOR defenses
 ├── WORKSHOP_MANAGEMENT.md       # Workshop lifecycle, joining codes & registration engine
+├── LAB_TEMPLATE_SYSTEM.md       # Lab template catalog, versioning & immutable snapshots
+├── CHALLENGE_BUILDER.md         # 5 challenge formats, progressive hints & explanations
+├── CHALLENGE_EVALUATION.md      # Server-side evaluation, normalizers & anti-inflation
+├── STUDENT_LAB_WORKSPACE.md     # Interactive student workspace, submissions & progress
 ├── SECURITY.md                  # Security controls & OWASP threat mitigations
 ├── ENVIRONMENT_SETUP.md         # Neon setup & migration instructions
 └── README.md                    # Project documentation
@@ -209,13 +213,24 @@ The platform exposes an extensive REST API under `/api`. All endpoints return st
 | | `GET` | `/api/workshops/:id/participants` | Organiser participant roster with search |
 | | `GET` | `/api/workshops/:id/participants/export` | Stream sanitized participant roster CSV |
 | | `PATCH` | `/api/workshops/:id/participants/:regId` | Approve, reject, or cancel participant |
-| **Templates** | `GET` | `/api/templates` | Catalog of lab blueprints |
-| | `POST` | `/api/templates` | Create lab template |
-| **Challenges** | `GET` | `/api/challenges` | Challenge milestones for a template |
-| | `POST` | `/api/challenges/:id/tasks` | Add predefined evaluation assertions |
-| **Sessions** | `POST` | `/api/sessions` | Allocate isolated sandbox session |
-| | `PATCH` | `/api/sessions/:id` | Update status (enforces state machine) |
-| **Student** | `GET` | `/api/student/profile` | Student dashboard statistics & badges |
+| **Templates** | `GET` | `/api/templates` | Filterable library catalog (11 domains) |
+| | `POST` | `/api/templates` | Create lab template with objectives & tools |
+| | `GET` | `/api/templates/:id` | Template details with challenges |
+| | `PATCH` | `/api/templates/:id` | Update template (increments version) |
+| | `POST` | `/api/templates/:id/duplicate` | Deep clone template + challenges as DRAFT |
+| | `POST` | `/api/templates/:id/publish` | Validate and publish template |
+| | `GET` | `/api/templates/:id/preview` | Student simulation with inspector |
+| | `GET` | `/api/templates/:id/analytics` | Completion rates, attempts, and workshop usage |
+| **Challenges** | `GET` | `/api/templates/:id/challenges` | List challenges (sanitized for students) |
+| | `POST` | `/api/templates/:id/challenges` | Create challenge across 5 formats |
+| | `PATCH` | `/api/templates/:id/challenges` | Reorder challenges in template |
+| | `POST` | `/api/challenges/:id/submit` | Pure server-side evaluation & scoring |
+| **Workshop Labs** | `GET` | `/api/workshops/:id/labs` | List attached labs with frozen snapshots |
+| | `POST` | `/api/workshops/:id/labs` | Attach template with immutable snapshot |
+| | `POST` | `/api/workshops/:id/labs/:labId` | Sync snapshot to latest template version |
+| | `DELETE` | `/api/workshops/:id/labs/:labId` | Detach lab from workshop |
+| **Student** | `GET` | `/api/student/workshops/:wId/labs/:lId` | Student workspace, milestones & progress |
+| | `GET` | `/api/student/profile` | Student dashboard statistics & badges |
 | | `GET` | `/api/student/workshops` | Enrolled workshops & live progress |
 
 For the complete API documentation with sample request and response payloads, see [API_DOCUMENTATION.md](file:///d:/projects/GDGLABOPS/API_DOCUMENTATION.md).
@@ -225,6 +240,10 @@ For the complete API documentation with sample request and response payloads, se
 ## 🛡️ Security Features
 
 - **No Arbitrary Shell Scripts**: Evaluation tasks use strict predefined JSON rule schemas (`FILE_PERMISSIONS`, `PORT_LISTENING`, `PROCESS_STATUS`) rather than storing raw execution strings in the database.
+- **Hidden Solution Sanitization**: All challenge responses stripped of `solutionData`, answer keys, and `isCorrect` flags before serving to student clients.
+- **Score Inflation Defense**: Idempotent grading prevents leaderboard gaming on duplicate submissions.
+- **Progressive Hint Penalties**: Configurable percentage penalty capped at 50% max to preserve motivation.
+- **Immutable Lab Snapshots**: Workshop curricula frozen at attachment time to isolate running events from template library edits.
 - **Infrastructure Masking**: Internal container IDs (`containerReference`) are stripped from all client-facing responses.
 - **Connection Isolation**: Next.js server queries route exclusively through Neon's PgBouncer connection pooler to prevent denial of service through connection exhaustion.
 - **Database Boundary**: Prisma Client is strictly server-side and credentials are never bundled into client packages.
@@ -240,6 +259,7 @@ For the complete API documentation with sample request and response payloads, se
 - [x] **Prompt 3**: Backend Infrastructure, Neon PostgreSQL Integration & REST APIs (`DATABASE.md`, `API_DOCUMENTATION.md`, `ENVIRONMENT_SETUP.md`)
 - [x] **Prompt 4**: Authentication, Multi-Tenancy & Role-Based Access Control (`AUTHENTICATION.md`, `RBAC.md`, `SECURITY.md`)
 - [x] **Prompt 5**: Workshop & Event Management (`WORKSHOP_MANAGEMENT.md`)
-- [ ] **Prompt 6**: Remote Execution Plane & Isolated Docker Container Daemon
-- [ ] **Prompt 7**: Real-time Terminal, WebSockets & Automated Task Evaluation Engine
-- [ ] **Prompt 8**: Workshop Analytics, Leaderboards, Certificates & Deployment
+- [x] **Prompt 6**: Lab Template Library, Challenge Builder & Safe Evaluation Engine (`LAB_TEMPLATE_SYSTEM.md`, `CHALLENGE_BUILDER.md`, `CHALLENGE_EVALUATION.md`, `STUDENT_LAB_WORKSPACE.md`)
+- [ ] **Prompt 7**: Remote Execution Plane & Isolated Docker Container Daemon
+- [ ] **Prompt 8**: Real-time Terminal, WebSockets & Automated Task Evaluation Engine
+- [ ] **Prompt 9**: Workshop Analytics, Leaderboards, Certificates & Deployment

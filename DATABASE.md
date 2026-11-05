@@ -225,21 +225,27 @@ Reusable lab blueprints defining Docker runtime environment specs and challenge 
 | `domain` | `VARCHAR(100)` | No | — | Technical category |
 | `difficulty` | `Difficulty` | No | Default: `INTERMEDIATE` | Target skill level |
 | `estimated_duration` | `INTEGER` | No | In minutes | Estimated completion time |
-| `environment_type` | `VARCHAR(50)` | No | Default: `'terminal'` | UI interface (`terminal`, `vscode`) |
+| `environment_type` | `VARCHAR(50)` | No | Default: `'terminal'` | UI interface (`terminal`, `vscode`, `web-app`) |
 | `learning_objectives`| `JSONB` | No | Array of strings | Structured objective list |
 | `prerequisites` | `JSONB` | No | Array of strings | Required prior knowledge |
-| `status` | `TemplateStatus` | No | Default: `PUBLISHED` | Publication status |
+| `short_description` | `VARCHAR(300)` | Yes | — | 1-line summary |
+| `cover_image_url` | `TEXT` | Yes | Valid URL | Visual template card cover |
+| `tags` | `TEXT[]` | No | Default: `{}` | Searchable categorization tags |
+| `required_tools` | `JSONB` | Yes | Array of `{ name, version }` | System tools specifications |
+| `version` | `INTEGER` | No | Default: `1` | Curriculum version counter |
+| `status` | `TemplateStatus` | No | Default: `DRAFT` | Publication status (`DRAFT`, `PUBLISHED`, `ARCHIVED`) |
 | `created_at` | `TIMESTAMPTZ` | No | Default: `now()` | Creation timestamp |
 | `updated_at` | `TIMESTAMPTZ` | No | Automatically updated | Last update timestamp |
 
 **Indexes & Constraints:**
 - `lab_templates_organisation_id_idx`: B-tree index on `organisation_id`
 - `lab_templates_domain_idx`: B-tree index on `domain`
+- `lab_templates_status_idx`: B-tree index on `status`
 
 ---
 
 ### 4.7. `workshop_labs`
-Junction mapping reusable lab templates to workshops in an ordered curriculum.
+Junction mapping reusable lab templates to workshops in an ordered curriculum with an immutable snapshot.
 
 | Column | PostgreSQL Type | Nullable | Constraints & Defaults | Description |
 | :--- | :--- | :--- | :--- | :--- |
@@ -248,6 +254,9 @@ Junction mapping reusable lab templates to workshops in an ordered curriculum.
 | `lab_template_id`| `UUID` | No | Foreign Key (`lab_templates.id`) `ON DELETE RESTRICT` | Referenced lab template |
 | `display_order` | `INTEGER` | No | Default: `1` | Sequence in workshop lab track |
 | `is_required` | `BOOLEAN` | No | Default: `true` | Required for workshop completion |
+| `available_from` | `TIMESTAMPTZ` | Yes | — | Optional availability start window |
+| `available_until` | `TIMESTAMPTZ` | Yes | — | Optional availability end window |
+| `lab_snapshot` | `JSONB` | Yes | Snapshot object | Immutable frozen snapshot of template & challenges |
 
 **Indexes & Constraints:**
 - `unique_workshop_lab_template`: Composite unique constraint on `(workshop_id, lab_template_id)`
@@ -257,7 +266,7 @@ Junction mapping reusable lab templates to workshops in an ordered curriculum.
 ---
 
 ### 4.8. `challenges`
-Milestones and practical exercises inside a lab template.
+Milestones and practical exercises inside a lab template evaluated across 5 pedagogical formats.
 
 | Column | PostgreSQL Type | Nullable | Constraints & Defaults | Description |
 | :--- | :--- | :--- | :--- | :--- |
@@ -266,10 +275,15 @@ Milestones and practical exercises inside a lab template.
 | `title` | `VARCHAR(255)` | No | — | Challenge title |
 | `description` | `TEXT` | No | — | Problem context and scenario |
 | `instructions` | `TEXT` | No | — | Step-by-step instructions (Markdown) |
+| `challenge_type` | `ChallengeType` | No | Default: `MULTIPLE_CHOICE` | `MULTIPLE_CHOICE`, `SHORT_ANSWER`, `CODE_KNOWLEDGE`, `GUIDED_TASK`, `RESEARCH_REFLECTION` |
 | `difficulty` | `Difficulty` | No | Default: `INTERMEDIATE` | Task complexity |
 | `points` | `INTEGER` | No | Default: `100` | Points awarded upon passing |
 | `time_limit` | `INTEGER` | Yes | In minutes | Optional countdown timer |
 | `display_order` | `INTEGER` | No | Default: `1` | Sequence within template |
+| `hints` | `JSONB` | Yes | Array of `{ id, orderIndex, content, penaltyPercent }` | Sequential hint ladder |
+| `reference_material`| `TEXT` | Yes | Markdown / Docs | Architectural reference documentation |
+| `solution_data` | `JSONB` | Yes | Server-side only | Verification rules, hidden keys, correct options |
+| `explanation` | `TEXT` | Yes | Markdown | Post-completion educational breakdown |
 | `evaluation_type`| `EvaluationType`| No | Default: `COMMAND_EXIT_CODE` | Verification mechanism |
 | `status` | `ChallengeStatus` | No | Default: `ACTIVE` | Availability status |
 | `created_at` | `TIMESTAMPTZ` | No | Default: `now()` | Creation timestamp |

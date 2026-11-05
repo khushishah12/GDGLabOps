@@ -10,7 +10,8 @@ export class WorkshopService {
   /**
    * Create a new workshop with cryptographic registration code and optional lab blueprints
    */
-  static async create(data: z.infer<typeof createWorkshopSchema>, organiserId?: string) {
+  static async create(raw: z.input<typeof createWorkshopSchema>, organiserId?: string) {
+    const data = createWorkshopSchema.parse(raw);
     const finalOrganiserId = organiserId || data.organiserId;
     if (!finalOrganiserId) {
       throw new ValidationError('Organiser identity is required to create a workshop.');

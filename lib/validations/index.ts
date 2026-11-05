@@ -162,14 +162,41 @@ export const updateRegistrationStatusSchema = z.object({
 // ========================================================
 // Lab Template & Challenge Validations
 // ========================================================
+
+export const LAB_DOMAINS = [
+  'Web Development',
+  'Cybersecurity',
+  'Cloud & Infrastructure',
+  'DevOps & CI/CD',
+  'Linux & System Administration',
+  'Artificial Intelligence',
+  'Machine Learning',
+  'Data Science & Analytics',
+  'Git & Open Source',
+  'Programming Fundamentals',
+  'Other',
+] as const;
+
+export const labToolSchema = z.object({
+  name: z.string().min(1, 'Tool name is required'),
+  version: z.string().optional(),
+  description: z.string().optional(),
+});
+
 export const createLabTemplateSchema = z.object({
   organisationId: uuidSchema,
   createdBy: uuidSchema,
   name: z.string().min(3, 'Template name must be at least 3 characters').max(150),
+  shortDescription: z.string().max(300, 'Short description cannot exceed 300 characters').optional().nullable(),
   description: z.string().min(10, 'Description must be at least 10 characters'),
   domain: z.string().min(2, 'Domain is required'),
   difficulty: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']).default('INTERMEDIATE'),
   estimatedDuration: z.coerce.number().int().positive('Estimated duration must be positive'),
+  coverImageUrl: z.string().url('Must be a valid URL').optional().nullable().or(z.literal('')),
+  tags: z.array(z.string()).default([]),
+  requiredTools: z.array(labToolSchema).optional().nullable(),
+  version: z.coerce.number().int().min(1).default(1),
+  status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).default('DRAFT'),
   environmentType: z.enum(['terminal', 'vscode', 'web-app']).default('terminal'),
   learningObjectives: z.array(z.string()).min(1, 'At least one learning objective is required'),
   prerequisites: z.array(z.string()).default([]),
@@ -177,18 +204,97 @@ export const createLabTemplateSchema = z.object({
 
 export const updateLabTemplateSchema = createLabTemplateSchema.partial();
 
+export const challengeHintSchema = z.object({
+  id: z.string().min(1),
+  orderIndex: z.coerce.number().int().min(1),
+  content: z.string().min(1, 'Hint content is required'),
+  penaltyPercent: z.coerce.number().int().min(0).max(100).default(10),
+});
+
+export const mcqOptionSchema = z.object({
+  id: z.string().min(1),
+  text: z.string().min(1, 'Option text is required'),
+  isCorrect: z.boolean().default(false),
+});
+
+export const mcqSolutionSchema = z.object({
+  options: z.array(mcqOptionSchema).min(2, 'At least 2 options required'),
+  allowMultiple: z.boolean().default(false),
+});
+
+export const shortAnswerSolutionSchema = z.object({
+  acceptedAnswers: z.array(z.string().min(1)).min(1, 'At least one accepted answer is required'),
+  caseSensitive: z.boolean().default(false),
+  whitespaceNormalized: z.boolean().default(true),
+  regexPattern: z.string().optional(),
+});
+
+export const codeKnowledgeSolutionSchema = z.object({
+  expectedCode: z.string().min(1, 'Expected code/command is required'),
+  matchMode: z.enum(['EXACT', 'CONTAINS', 'REGEX', 'NORMALIZED']).default('NORMALIZED'),
+  language: z.string().default('bash'),
+  ignoreWhitespace: z.boolean().default(true),
+});
+
+export const guidedTaskChecklistItemSchema = z.object({
+  id: z.string().min(1),
+  text: z.string().min(1, 'Task text is required'),
+  isRequired: z.boolean().default(true),
+});
+
+export const guidedTaskSolutionSchema = z.object({
+  checklist: z.array(guidedTaskChecklistItemSchema).min(1, 'At least one task required'),
+  confirmationCode: z.string().optional(),
+  requireAllChecklist: z.boolean().default(true),
+});
+
+export const researchReflectionSolutionSchema = z.object({
+  minWordCount: z.coerce.number().int().min(5).default(50),
+  promptGuidelines: z.string().optional(),
+  autoAwardPoints: z.boolean().default(true),
+});
+
 export const createChallengeSchema = z.object({
   labTemplateId: uuidSchema,
   title: z.string().min(3, 'Challenge title is required').max(150),
-  description: z.string().min(10),
-  instructions: z.string().min(10),
+  description: z.string().min(5, 'Description is required'),
+  instructions: z.string().min(5, 'Instructions are required'),
+  challengeType: z
+    .enum(['MULTIPLE_CHOICE', 'SHORT_ANSWER', 'CODE_KNOWLEDGE', 'GUIDED_TASK', 'RESEARCH_REFLECTION'])
+    .default('MULTIPLE_CHOICE'),
   difficulty: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']).default('INTERMEDIATE'),
   points: z.coerce.number().int().min(10).max(1000).default(100),
-  timeLimit: z.coerce.number().int().positive().optional(),
+  timeLimit: z.coerce.number().int().positive().optional().nullable(),
   displayOrder: z.coerce.number().int().min(1).default(1),
+  hints: z.array(challengeHintSchema).optional().nullable(),
+  referenceMaterial: z.string().optional().nullable(),
+  solutionData: z.record(z.any()).optional().nullable(),
+  explanation: z.string().optional().nullable(),
   evaluationType: z
     .enum(['COMMAND_EXIT_CODE', 'STDOUT_REGEX', 'FILE_CONTENT', 'HTTP_PROBE'])
     .default('COMMAND_EXIT_CODE'),
+  status: z.enum(['ACTIVE', 'DRAFT', 'ARCHIVED']).default('ACTIVE'),
+});
+
+export const updateChallengeSchema = createChallengeSchema.partial();
+
+export const reorderChallengesSchema = z.object({
+  orderedIds: z.array(uuidSchema).min(1, 'At least one challenge ID is required'),
+});
+
+// Workshop-Lab Attachment Validations
+export const attachWorkshopLabSchema = z.object({
+  workshopId: uuidSchema,
+  labTemplateId: uuidSchema,
+  displayOrder: z.coerce.number().int().min(1).default(1),
+  isRequired: z.boolean().default(true),
+  availableFrom: z.coerce.date().optional().nullable(),
+  availableUntil: z.coerce.date().optional().nullable(),
+  createSnapshot: z.boolean().default(true),
+});
+
+export const reorderWorkshopLabsSchema = z.object({
+  orderedTemplateIds: z.array(uuidSchema).min(1, 'At least one template ID is required'),
 });
 
 // Structured Predefined Task Evaluation Schema (No raw arbitrary unverified shell scripts)
@@ -240,10 +346,12 @@ export const validSessionTransitions: Record<string, string[]> = {
 // Challenge Submission Validations
 // ========================================================
 export const submitChallengeSchema = z.object({
-  studentId: uuidSchema,
+  studentId: uuidSchema.optional(),
   challengeId: uuidSchema,
-  labSessionId: uuidSchema,
-  submissionData: z.record(z.any()),
+  workshopId: uuidSchema.optional().nullable(),
+  labSessionId: uuidSchema.optional().nullable(),
+  answer: z.any(),
+  usedHintIds: z.array(z.string()).default([]),
 });
 
 // ========================================================

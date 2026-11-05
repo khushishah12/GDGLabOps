@@ -34,6 +34,11 @@ import {
   User,
   ShieldCheck,
   Ban,
+  Plus,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  Eye,
 } from 'lucide-react';
 
 export default function WorkshopDetailPage() {
@@ -55,6 +60,130 @@ export default function WorkshopDetailPage() {
   const [editInstructorBio, setEditInstructorBio] = useState('');
   const [editVenueAddress, setEditVenueAddress] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Attached Labs State
+  const [attachedLabs, setAttachedLabs] = useState<any[]>([]);
+  const [isAttachModalOpen, setIsAttachModalOpen] = useState(false);
+  const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [isAttaching, setIsAttaching] = useState(false);
+
+  const fetchAttachedLabs = async () => {
+    if (!workshopId) return;
+    try {
+      const res = await fetch(`/api/workshops/${workshopId}/labs`);
+      const json = await res.json();
+      if (res.ok && json.success && Array.isArray(json.data)) {
+        setAttachedLabs(json.data);
+      }
+    } catch {
+      // quiet fallback
+    }
+  };
+
+  const fetchAvailableTemplates = async () => {
+    try {
+      const res = await fetch('/api/templates');
+      const json = await res.json();
+      if (res.ok && json.success && Array.isArray(json.data)) {
+        setAvailableTemplates(json.data);
+        if (json.data.length > 0 && !selectedTemplateId) {
+          setSelectedTemplateId(json.data[0].id);
+        }
+      }
+    } catch {
+      // quiet fallback
+    }
+  };
+
+  const handleAttachLab = async () => {
+    if (!selectedTemplateId) return;
+    setIsAttaching(true);
+    try {
+      const res = await fetch(`/api/workshops/${workshopId}/labs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          labTemplateId: selectedTemplateId,
+          isRequired: true,
+          createSnapshot: true,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        success('Lab Attached', 'Template curriculum snapshot successfully attached to workshop.');
+        setIsAttachModalOpen(false);
+        fetchAttachedLabs();
+      } else {
+        error('Attach Failed', json.error?.message || 'Failed to attach lab template');
+      }
+    } catch {
+      error('Error', 'Failed to attach lab template');
+    } finally {
+      setIsAttaching(false);
+    }
+  };
+
+  const handleDetachLab = async (labTemplateId: string) => {
+    try {
+      const res = await fetch(`/api/workshops/${workshopId}/labs/${labTemplateId}`, {
+        method: 'DELETE',
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        info('Lab Detached', 'Lab template removed from workshop curriculum.');
+        fetchAttachedLabs();
+      } else {
+        error('Error', json.error?.message || 'Failed to detach lab');
+      }
+    } catch {
+      error('Error', 'Failed to detach lab');
+    }
+  };
+
+  const handleSyncSnapshot = async (labTemplateId: string) => {
+    try {
+      const res = await fetch(`/api/workshops/${workshopId}/labs/${labTemplateId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'sync_snapshot' }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        success('Snapshot Refreshed', 'Workshop lab snapshot synced to latest template version.');
+        fetchAttachedLabs();
+      } else {
+        error('Error', json.error?.message || 'Failed to sync snapshot');
+      }
+    } catch {
+      error('Error', 'Failed to sync snapshot');
+    }
+  };
+
+  const handleReorderLabs = async (index: number, direction: 'up' | 'down') => {
+    const target = direction === 'up' ? index - 1 : index + 1;
+    if (target < 0 || target >= attachedLabs.length) return;
+
+    const reordered = [...attachedLabs];
+    const temp = reordered[index];
+    reordered[index] = reordered[target];
+    reordered[target] = temp;
+
+    setAttachedLabs(reordered);
+
+    try {
+      await fetch(`/api/workshops/${workshopId}/labs`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderedTemplateIds: reordered.map((l) => l.labTemplateId),
+        }),
+      });
+      fetchAttachedLabs();
+    } catch {
+      error('Error', 'Failed to persist reorder.');
+    }
+  };
 
   const fetchWorkshop = async () => {
     if (!workshopId) return;
@@ -83,6 +212,8 @@ export default function WorkshopDetailPage() {
 
   useEffect(() => {
     fetchWorkshop();
+    fetchAttachedLabs();
+    fetchAvailableTemplates();
   }, [workshopId]);
 
   const handleCopyCode = () => {
@@ -421,6 +552,198 @@ export default function WorkshopDetailPage() {
             </Link>
           </Card>
         </div>
+
+        {/* Attached Lab Curricula & Practical Templates */}
+        <Card className="p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                  Attached Lab Curricula & Practical Templates
+                </h3>
+                <Badge variant="outline" size="sm">
+                  {attachedLabs.length} {attachedLabs.length === 1 ? 'Lab' : 'Labs'}
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Technical lab templates attached with immutable version snapshots for this workshop.
+              </p>
+            </div>
+
+            <Button
+              size="sm"
+              onClick={() => setIsAttachModalOpen(true)}
+              className="text-xs bg-[#1a73e8] hover:bg-[#1557b0] dark:bg-[#4285F4]"
+              leftIcon={<Plus className="w-4 h-4" />}
+            >
+              Attach Lab Template
+            </Button>
+          </div>
+
+          {attachedLabs.length === 0 ? (
+            <div className="py-10 text-center space-y-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+              <Layers className="w-8 h-8 text-slate-400 mx-auto" />
+              <div className="space-y-1">
+                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">No Lab Templates Attached</h4>
+                <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                  Attach preconfigured lab templates from your organisation library to provide students with structured practical challenges.
+                </p>
+              </div>
+              <Button size="sm" variant="outline" className="text-xs" onClick={() => setIsAttachModalOpen(true)}>
+                Attach from Library
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {attachedLabs.map((lab, idx) => {
+                const template = lab.template;
+                const challengesCount = lab.challenges?.length ?? 0;
+
+                return (
+                  <div
+                    key={lab.id}
+                    className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1.5 flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-slate-400">#{lab.displayOrder}</span>
+                        <Badge variant="domain" size="sm">
+                          {template?.domain}
+                        </Badge>
+                        <Badge variant="outline" size="sm">
+                          {template?.difficulty}
+                        </Badge>
+                        {lab.hasSnapshot && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300">
+                            Immutable Snapshot Frozen
+                          </span>
+                        )}
+                      </div>
+
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
+                        {template?.name}
+                      </h4>
+                      <p className="text-xs text-slate-500 line-clamp-1">
+                        {template?.shortDescription || template?.description}
+                      </p>
+
+                      <div className="flex items-center gap-4 text-[11px] text-slate-400 pt-1">
+                        <span className="flex items-center gap-1 font-mono">
+                          <Clock className="w-3.5 h-3.5" /> {template?.estimatedDuration}m
+                        </span>
+                        <span className="flex items-center gap-1 font-mono">
+                          <Trophy className="w-3.5 h-3.5" /> {challengesCount} challenges
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0"
+                        disabled={idx === 0}
+                        onClick={() => handleReorderLabs(idx, 'up')}
+                        title="Move Up"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0"
+                        disabled={idx === attachedLabs.length - 1}
+                        onClick={() => handleReorderLabs(idx, 'down')}
+                        title="Move Down"
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </Button>
+                      <Link href={`/dashboard/templates/${lab.labTemplateId}/preview`}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-xs px-2 text-slate-600 dark:text-slate-300"
+                          title="Preview student lab experience"
+                          leftIcon={<Eye className="w-3.5 h-3.5" />}
+                        >
+                          Preview
+                        </Button>
+                      </Link>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 text-xs px-2 text-blue-600 dark:text-blue-400"
+                        onClick={() => handleSyncSnapshot(lab.labTemplateId)}
+                        title="Refresh snapshot to latest template version"
+                        leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+                      >
+                        Sync
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0 text-slate-400 hover:text-red-500"
+                        onClick={() => handleDetachLab(lab.labTemplateId)}
+                        title="Detach from workshop"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+
+        {/* Attach Lab Modal */}
+        <Dialog open={isAttachModalOpen} onOpenChange={setIsAttachModalOpen}>
+          <DialogHeader>
+            <DialogTitle>Attach Lab Template to Workshop</DialogTitle>
+            <DialogDescription>
+              Select a reusable lab template from your organisation's curriculum library.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                Select Lab Template
+              </label>
+              <Select
+                value={selectedTemplateId}
+                onChange={(e) => setSelectedTemplateId(e.target.value)}
+                options={availableTemplates.map((t) => ({
+                  value: t.id,
+                  label: `${t.name} (${t.domain} • ${t.difficulty})`,
+                }))}
+                className="text-xs"
+              />
+            </div>
+
+            <div className="p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-900/40 text-xs text-slate-600 dark:text-slate-300 space-y-1">
+              <span className="font-bold block text-blue-900 dark:text-blue-200">
+                Immutable Curriculum Snapshot
+              </span>
+              <p className="text-[11px] leading-relaxed">
+                When attached, a snapshot of all challenges and instructions is permanently frozen for this workshop.
+                Any subsequent edits to the template library will not disrupt active student sessions.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setIsAttachModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              isLoading={isAttaching}
+              onClick={handleAttachLab}
+              className="bg-[#1a73e8] hover:bg-[#1557b0] text-xs"
+            >
+              Attach Template
+            </Button>
+          </DialogFooter>
+        </Dialog>
 
         {/* Edit Modal */}
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>

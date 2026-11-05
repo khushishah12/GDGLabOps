@@ -1,16 +1,35 @@
 import prisma from '@/lib/prisma';
-import { NotFoundError } from '@/lib/errors';
+import { NotFoundError, ValidationError, ForbiddenError } from '@/lib/errors';
 import { z } from 'zod';
-import { createChallengeSchema, createChallengeTaskSchema } from '@/lib/validations';
+import {
+  createChallengeSchema,
+  updateChallengeSchema,
+  createChallengeTaskSchema,
+  submitChallengeSchema,
+} from '@/lib/validations';
+import {
+  evaluateChallengeSubmission,
+  sanitizeChallengeForStudent,
+  EvaluationResult,
+} from '@/lib/challenges/evaluator';
+import { Prisma } from '@prisma/client';
 
 export class ChallengeService {
-  static async create(data: z.infer<typeof createChallengeSchema>) {
+  /**
+   * Create a new challenge milestone attached to a lab template.
+   */
+  static async create(raw: z.input<typeof createChallengeSchema>) {
+    const data = createChallengeSchema.parse(raw);
     const template = await prisma.labTemplate.findUnique({
       where: { id: data.labTemplateId },
+      include: { _count: { select: { challenges: true } } },
     });
+
     if (!template) {
       throw new NotFoundError(`Lab template with ID "${data.labTemplateId}" was not found`);
     }
+
+    const nextOrder = data.displayOrder || template._count.challenges + 1;
 
     return prisma.challenge.create({
       data: {
@@ -18,25 +37,18 @@ export class ChallengeService {
         title: data.title,
         description: data.description,
         instructions: data.instructions,
+        challengeType: data.challengeType,
         difficulty: data.difficulty,
         points: data.points,
         timeLimit: data.timeLimit || null,
-        displayOrder: data.displayOrder,
+        displayOrder: nextOrder,
+        hints: (data.hints as Prisma.InputJsonValue) || Prisma.JsonNull,
+        referenceMaterial: data.referenceMaterial || null,
+        solutionData: (data.solutionData as Prisma.InputJsonValue) || Prisma.JsonNull,
+        explanation: data.explanation || null,
         evaluationType: data.evaluationType,
-        status: 'ACTIVE',
+        status: data.status || 'ACTIVE',
       },
-    });
-  }
-
-  static async list(labTemplateId?: string) {
-    const where: any = {};
-    if (labTemplateId) {
-      where.labTemplateId = labTemplateId;
-    }
-
-    return prisma.challenge.findMany({
-      where,
-      orderBy: { displayOrder: 'asc' },
       include: {
         tasks: { orderBy: { displayOrder: 'asc' } },
         labTemplate: { select: { id: true, name: true, domain: true } },
@@ -44,6 +56,117 @@ export class ChallengeService {
     });
   }
 
+  /**
+   * Update challenge details, hints, or solution configuration.
+   */
+  static async update(id: string, raw: z.input<typeof updateChallengeSchema>) {
+    const data = updateChallengeSchema.parse(raw);
+    await this.getById(id);
+
+    const updateData: Prisma.ChallengeUpdateInput = {};
+
+    if (data.title !== undefined) updateData.title = data.title;
+    if (data.description !== undefined) updateData.description = data.description;
+    if (data.instructions !== undefined) updateData.instructions = data.instructions;
+    if (data.challengeType !== undefined) updateData.challengeType = data.challengeType;
+    if (data.difficulty !== undefined) updateData.difficulty = data.difficulty;
+    if (data.points !== undefined) updateData.points = data.points;
+    if (data.timeLimit !== undefined) updateData.timeLimit = data.timeLimit;
+    if (data.displayOrder !== undefined) updateData.displayOrder = data.displayOrder;
+    if (data.hints !== undefined) {
+      updateData.hints = (data.hints as Prisma.InputJsonValue) || Prisma.JsonNull;
+    }
+    if (data.referenceMaterial !== undefined) updateData.referenceMaterial = data.referenceMaterial;
+    if (data.solutionData !== undefined) {
+      updateData.solutionData = (data.solutionData as Prisma.InputJsonValue) || Prisma.JsonNull;
+    }
+    if (data.explanation !== undefined) updateData.explanation = data.explanation;
+    if (data.evaluationType !== undefined) updateData.evaluationType = data.evaluationType;
+    if (data.status !== undefined) updateData.status = data.status;
+
+    return prisma.challenge.update({
+      where: { id },
+      data: updateData,
+      include: {
+        tasks: { orderBy: { displayOrder: 'asc' } },
+        labTemplate: { select: { id: true, name: true, domain: true } },
+      },
+    });
+  }
+
+  /**
+   * Delete a challenge and re-order the remaining challenges in the template.
+   */
+  static async delete(id: string) {
+    const challenge = await this.getById(id);
+
+    return prisma.$transaction(async (tx) => {
+      await tx.challenge.delete({ where: { id } });
+
+      // Renumber remaining challenges
+      const remaining = await tx.challenge.findMany({
+        where: { labTemplateId: challenge.labTemplateId },
+        orderBy: { displayOrder: 'asc' },
+      });
+
+      for (let i = 0; i < remaining.length; i++) {
+        await tx.challenge.update({
+          where: { id: remaining[i].id },
+          data: { displayOrder: i + 1 },
+        });
+      }
+
+      return { deletedId: id, reorderedCount: remaining.length };
+    });
+  }
+
+  /**
+   * Reorder challenges within a lab template.
+   */
+  static async reorder(labTemplateId: string, orderedIds: string[]) {
+    const updates = orderedIds.map((id, i) =>
+      prisma.challenge.update({
+        where: { id, labTemplateId },
+        data: { displayOrder: i + 1 },
+      })
+    );
+    await prisma.$transaction(updates);
+
+    return prisma.challenge.findMany({
+      where: { labTemplateId },
+      orderBy: { displayOrder: 'asc' },
+      select: { id: true, title: true, displayOrder: true, points: true },
+    });
+  }
+
+  /**
+   * List challenges for a template. If student requested, strip solution data.
+   */
+  static async list(labTemplateId?: string, isStudent = false) {
+    const where: Prisma.ChallengeWhereInput = {};
+    if (labTemplateId) {
+      where.labTemplateId = labTemplateId;
+    }
+
+    const challenges = await prisma.challenge.findMany({
+      where,
+      orderBy: { displayOrder: 'asc' },
+      include: {
+        tasks: { orderBy: { displayOrder: 'asc' } },
+        labTemplate: { select: { id: true, name: true, domain: true } },
+      },
+    });
+
+    if (isStudent) {
+      return challenges.map((ch) => sanitizeChallengeForStudent(ch));
+    }
+
+    return challenges;
+  }
+
+  /**
+   * Retrieve challenge by ID (Organiser / Admin view with full solutionData).
+   */
   static async getById(id: string) {
     const challenge = await prisma.challenge.findUnique({
       where: { id },
@@ -60,13 +183,193 @@ export class ChallengeService {
     return challenge;
   }
 
-  static async createTask(data: z.infer<typeof createChallengeTaskSchema>) {
-    const challenge = await prisma.challenge.findUnique({
-      where: { id: data.challengeId },
+  /**
+   * Retrieve challenge for student view with all secret keys and solutionData stripped.
+   */
+  static async getStudentView(id: string, options?: { isCompleted?: boolean; isPreviewMode?: boolean }) {
+    const challenge = await this.getById(id);
+    return sanitizeChallengeForStudent(challenge, options);
+  }
+
+  /**
+   * Pure server-side evaluation of challenge submission.
+   * Updates challenge submission record, student progress, and user points idempotently.
+   */
+  static async submitAndEvaluate(params: {
+    studentId: string;
+    challengeId: string;
+    workshopId?: string | null;
+    labSessionId?: string | null;
+    answer: any;
+    usedHintIds?: string[];
+  }): Promise<{
+    submission: any;
+    evaluation: EvaluationResult;
+    netPointsAwarded: number;
+    alreadyPassed: boolean;
+  }> {
+    const { studentId, challengeId, workshopId, labSessionId, answer, usedHintIds = [] } = params;
+
+    // 1. Fetch challenge with server-side solution data
+    const challenge = await this.getById(challengeId);
+
+    // 2. Run pure server-side evaluator
+    const evaluation = evaluateChallengeSubmission(challenge, answer, usedHintIds);
+
+    // 3. Score Inflation Defense:
+    // Check if student already passed this challenge
+    const priorPassingSubmissions = await prisma.challengeSubmission.findMany({
+      where: {
+        studentId,
+        challengeId,
+        status: 'PASSED',
+        ...(workshopId ? { workshopId } : {}),
+      },
+      orderBy: { pointsAwarded: 'desc' },
     });
-    if (!challenge) {
-      throw new NotFoundError(`Challenge with ID "${data.challengeId}" was not found`);
+
+    const alreadyPassed = priorPassingSubmissions.length > 0;
+    const maxPriorPoints = alreadyPassed ? priorPassingSubmissions[0].pointsAwarded : 0;
+
+    let netPointsAwarded = 0;
+    if (evaluation.passed) {
+      // Award difference if new score is higher, otherwise 0
+      netPointsAwarded = Math.max(0, evaluation.pointsAwarded - maxPriorPoints);
     }
+
+    // 4. Record submission in database
+    const submission = await prisma.challengeSubmission.create({
+      data: {
+        studentId,
+        challengeId,
+        workshopId: workshopId || null,
+        labSessionId: labSessionId || null,
+        submissionData: {
+          answer,
+          usedHintIds,
+          totalPenaltyPercent: evaluation.totalPenaltyPercent,
+        } as Prisma.InputJsonValue,
+        score: evaluation.score,
+        pointsAwarded: evaluation.passed ? evaluation.pointsAwarded : 0,
+        status: evaluation.passed ? 'PASSED' : 'FAILED',
+        feedback: evaluation.feedback,
+        evaluatedAt: new Date(),
+      },
+    });
+
+    // 5. Update StudentProgress if submitted within a workshop context
+    if (workshopId) {
+      // Fetch or create StudentProgress
+      const progress = await prisma.studentProgress.findFirst({
+        where: {
+          studentId,
+          workshopId,
+          labTemplateId: challenge.labTemplateId,
+        },
+      });
+
+      // Determine total challenges attached to this workshop
+      const workshopLabs = await prisma.workshopLab.findMany({
+        where: { workshopId },
+        include: {
+          labTemplate: {
+            include: { challenges: { select: { id: true } } },
+          },
+        },
+      });
+
+      const allWorkshopChallengeIds = new Set<string>();
+      for (const wl of workshopLabs) {
+        for (const ch of wl.labTemplate.challenges) {
+          allWorkshopChallengeIds.add(ch.id);
+        }
+      }
+      const totalWorkshopChallenges = Math.max(1, allWorkshopChallengeIds.size);
+
+      const currentChallengeProgress =
+        progress && progress.challengeProgress && typeof progress.challengeProgress === 'object'
+          ? (progress.challengeProgress as Record<string, any>)
+          : {};
+
+      const existingChData = currentChallengeProgress[challengeId] || {
+        attempts: 0,
+        status: 'NOT_STARTED',
+        pointsAwarded: 0,
+      };
+
+      const updatedChData = {
+        status: evaluation.passed ? 'PASSED' : existingChData.status === 'PASSED' ? 'PASSED' : 'FAILED',
+        score: Math.max(existingChData.score || 0, evaluation.score),
+        pointsAwarded: Math.max(existingChData.pointsAwarded || 0, evaluation.pointsAwarded),
+        attempts: (existingChData.attempts || 0) + 1,
+        lastAttemptAt: new Date().toISOString(),
+        completedAt: evaluation.passed
+          ? existingChData.completedAt || new Date().toISOString()
+          : existingChData.completedAt || null,
+      };
+
+      currentChallengeProgress[challengeId] = updatedChData;
+
+      // Recalculate metrics
+      let completedChallengesCount = 0;
+      let totalPointsSum = 0;
+
+      for (const [_, chData] of Object.entries(currentChallengeProgress)) {
+        if (chData && chData.status === 'PASSED') {
+          completedChallengesCount++;
+          totalPointsSum += Number(chData.pointsAwarded) || 0;
+        }
+      }
+
+      const completionPercentage = Math.min(
+        100,
+        Math.round((completedChallengesCount / totalWorkshopChallenges) * 100 * 10) / 10
+      );
+
+      if (!progress) {
+        await prisma.studentProgress.create({
+          data: {
+            studentId,
+            workshopId,
+            labTemplateId: challenge.labTemplateId,
+            completedChallenges: completedChallengesCount,
+            totalChallenges: totalWorkshopChallenges,
+            totalPoints: totalPointsSum,
+            completionPercentage,
+            challengeProgress: currentChallengeProgress as Prisma.InputJsonValue,
+            completedAt: completionPercentage >= 100 ? new Date() : null,
+          },
+        });
+      } else {
+        await prisma.studentProgress.update({
+          where: { id: progress.id },
+          data: {
+            completedChallenges: completedChallengesCount,
+            totalChallenges: totalWorkshopChallenges,
+            totalPoints: totalPointsSum,
+            completionPercentage,
+            challengeProgress: currentChallengeProgress as Prisma.InputJsonValue,
+            completedAt: completionPercentage >= 100 ? progress.completedAt || new Date() : null,
+          },
+        });
+      }
+    }
+
+    // 6. Cumulative points are persisted on StudentProgress and ChallengeSubmission
+
+    return {
+      submission,
+      evaluation,
+      netPointsAwarded,
+      alreadyPassed,
+    };
+  }
+
+  /**
+   * Helper to add a granular predefined task check.
+   */
+  static async createTask(data: z.infer<typeof createChallengeTaskSchema>) {
+    await this.getById(data.challengeId);
 
     return prisma.challengeTask.create({
       data: {
@@ -74,7 +377,7 @@ export class ChallengeService {
         title: data.title,
         description: data.description,
         taskType: data.taskType,
-        evaluationConfig: data.evaluationConfig,
+        evaluationConfig: data.evaluationConfig as Prisma.InputJsonValue,
         points: data.points,
         displayOrder: data.displayOrder,
       },

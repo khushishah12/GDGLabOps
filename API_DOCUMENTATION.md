@@ -617,3 +617,82 @@ Any illegal transition returns `400 Bad Request`.
   - Writes audit record to `AuditLog`.
 - **Export Participant CSV:** `GET /api/workshops/:id/participants/export`
   - Returns `text/csv` stream with headers: `Participant Name, Email Address, Registration Date (UTC), Status, Attendance, Notes`.
+
+---
+
+## 8. Lab Template Library & Challenge Builder APIs (Prompt 6)
+
+### 8.1. List Lab Templates
+- **Endpoint:** `GET /api/templates`
+- **Query Parameters:** `domain`, `difficulty`, `status`, `organisationId`, `search`
+- **Response:** List of templates with challenge counts and attached workshop counts.
+
+### 8.2. Create Lab Template
+- **Endpoint:** `POST /api/templates`
+- **Body:**
+```json
+{
+  "organisationId": "a0000000-0000-4000-8000-000000000001",
+  "name": "Linux Permissions & Hardening Workshop",
+  "shortDescription": "Auditing and securing Linux access controls",
+  "description": "## Objectives\nComprehensive security walkthrough...",
+  "domain": "Cybersecurity",
+  "difficulty": "INTERMEDIATE",
+  "estimatedDuration": 60,
+  "environmentType": "terminal",
+  "learningObjectives": ["Master octal permissions", "Audit shadow files"],
+  "prerequisites": ["Basic command line familiarity"],
+  "tags": ["linux", "security"],
+  "requiredTools": [{ "name": "bash", "version": "5.0+" }],
+  "status": "DRAFT"
+}
+```
+
+### 8.3. Template Actions
+- **Get Details:** `GET /api/templates/:id`
+- **Update Template:** `PATCH /api/templates/:id` (automatically increments `version`)
+- **Delete Template:** `DELETE /api/templates/:id` (blocked if attached to active workshops)
+- **Deep Clone Template:** `POST /api/templates/:id/duplicate` (clones template and all challenges as `DRAFT`)
+- **Publish Template:** `POST /api/templates/:id/publish` (validates >= 1 challenge and objectives)
+- **Archive Template:** `POST /api/templates/:id/archive`
+- **Organiser Preview:** `GET /api/templates/:id/preview?instructorMode=true`
+- **Template Analytics:** `GET /api/templates/:id/analytics`
+
+### 8.4. Challenge Milestone Operations
+- **List Challenges:** `GET /api/templates/:id/challenges` (student view sanitizes `solutionData`)
+- **Create Challenge:** `POST /api/templates/:id/challenges`
+  - Supports 5 types: `MULTIPLE_CHOICE`, `SHORT_ANSWER`, `CODE_KNOWLEDGE`, `GUIDED_TASK`, `RESEARCH_REFLECTION`
+- **Reorder Challenges:** `PATCH /api/templates/:id/challenges`
+  - Body: `{ "orderedIds": ["uuid-1", "uuid-2", ...] }`
+- **Get Challenge:** `GET /api/challenges/:id` (sanitized for students)
+- **Update Challenge:** `PATCH /api/challenges/:id`
+- **Delete Challenge:** `DELETE /api/challenges/:id` (renumbers remaining challenges)
+
+### 8.5. Safe Challenge Submission & Evaluation
+- **Endpoint:** `POST /api/challenges/:id/submit`
+- **Body:**
+```json
+{
+  "workshopId": "uuid-workshop",
+  "answer": "opt-640",
+  "usedHintIds": ["hint-1"]
+}
+```
+- **Behavior:**
+  - Evaluates submission purely on the server.
+  - Applies progressive hint score deduction (capped at 50% max).
+  - Anti-score-inflation idempotency: repeated passing submissions do not award duplicate points.
+  - Updates `StudentProgress` (`challengeProgress`, `completionPercentage`, `totalPoints`).
+  - Returns `{ passed: true, score: 90, pointsAwarded: 90, feedback: "...", unlockedExplanation: "..." }`.
+
+### 8.6. Workshop Lab Attachment & Snapshot Strategy
+- **List Workshop Labs:** `GET /api/workshops/:id/labs`
+- **Attach Lab Template:** `POST /api/workshops/:id/labs`
+  - Body: `{ "labTemplateId": "uuid", "isRequired": true, "createSnapshot": true }`
+  - Stores immutable `labSnapshot` JSON freezing the template & challenges.
+- **Reorder Workshop Labs:** `PATCH /api/workshops/:id/labs`
+  - Body: `{ "orderedTemplateIds": ["uuid-1", "uuid-2"] }`
+- **Detach Lab:** `DELETE /api/workshops/:id/labs/:labId`
+- **Sync Snapshot:** `POST /api/workshops/:id/labs/:labId` with `{ "action": "sync_snapshot" }`
+- **Student Workshop Lab Workspace:** `GET /api/student/workshops/:workshopId/labs/:labId`
+  - Verifies registration, delivers sanitized challenges, and student's progress tracking.

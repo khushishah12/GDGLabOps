@@ -92,6 +92,14 @@ enum EvaluationType {
   HTTP_PROBE
 }
 
+enum ChallengeType {
+  MULTIPLE_CHOICE
+  SHORT_ANSWER
+  CODE_KNOWLEDGE
+  GUIDED_TASK
+  RESEARCH_REFLECTION
+}
+
 enum ChallengeStatus {
   ACTIVE
   DRAFT
@@ -234,10 +242,11 @@ model Workshop {
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   organiser    User         @relation("OrganisedWorkshops", fields: [organiserId], references: [id], onDelete: Restrict)
 
-  registrations   WorkshopRegistration[]
-  workshopLabs    WorkshopLab[]
-  labSessions     LabSession[]
-  studentProgress StudentProgress[]
+  registrations        WorkshopRegistration[]
+  workshopLabs         WorkshopLab[]
+  labSessions          LabSession[]
+  studentProgress      StudentProgress[]
+  challengeSubmissions ChallengeSubmission[]
 
   @@index([registrationCode])
   @@index([status])
@@ -274,10 +283,15 @@ model LabTemplate {
   organisationId     String         @map("organisation_id") @db.Uuid
   createdBy          String         @map("created_by") @db.Uuid
   name               String
+  shortDescription   String?        @map("short_description")
   description        String         @db.Text
   domain             String
   difficulty         Difficulty     @default(INTERMEDIATE)
   estimatedDuration  Int            @map("estimated_duration") // in minutes
+  coverImageUrl      String?        @map("cover_image_url")
+  tags               String[]       @default([])
+  requiredTools      Json?          @map("required_tools")
+  version            Int            @default(1)
   environmentType    String         @default("terminal") @map("environment_type")
   learningObjectives Json           @map("learning_objectives")
   prerequisites      Json
@@ -295,16 +309,20 @@ model LabTemplate {
 
   @@index([organisationId])
   @@index([domain])
+  @@index([status])
   @@map("lab_templates")
 }
 
 /// Junction enabling workshops to incorporate multiple reusable lab templates
 model WorkshopLab {
-  id            String  @id @default(uuid()) @db.Uuid
-  workshopId    String  @map("workshop_id") @db.Uuid
-  labTemplateId String  @map("lab_template_id") @db.Uuid
-  displayOrder  Int     @default(1) @map("display_order")
-  isRequired    Boolean @default(true) @map("is_required")
+  id            String    @id @default(uuid()) @db.Uuid
+  workshopId    String    @map("workshop_id") @db.Uuid
+  labTemplateId String    @map("lab_template_id") @db.Uuid
+  displayOrder  Int       @default(1) @map("display_order")
+  isRequired    Boolean   @default(true) @map("is_required")
+  availableFrom DateTime? @map("available_from")
+  availableUntil DateTime? @map("available_until")
+  labSnapshot   Json?     @map("lab_snapshot") // Immutable snapshot of template + challenges at time of attachment
 
   workshop    Workshop    @relation(fields: [workshopId], references: [id], onDelete: Cascade)
   labTemplate LabTemplate @relation(fields: [labTemplateId], references: [id], onDelete: Restrict)
@@ -317,19 +335,24 @@ model WorkshopLab {
 
 /// Individual challenge milestone attached to a lab template
 model Challenge {
-  id             String          @id @default(uuid()) @db.Uuid
-  labTemplateId  String          @map("lab_template_id") @db.Uuid
-  title          String
-  description    String          @db.Text
-  instructions   String          @db.Text
-  difficulty     Difficulty      @default(INTERMEDIATE)
-  points         Int             @default(100)
-  timeLimit      Int?            @map("time_limit") // in minutes
-  displayOrder   Int             @default(1) @map("display_order")
-  evaluationType EvaluationType  @default(COMMAND_EXIT_CODE) @map("evaluation_type")
-  status         ChallengeStatus @default(ACTIVE)
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
+  id                String          @id @default(uuid()) @db.Uuid
+  labTemplateId     String          @map("lab_template_id") @db.Uuid
+  title             String
+  description       String          @db.Text
+  instructions      String          @db.Text
+  challengeType     ChallengeType   @default(MULTIPLE_CHOICE) @map("challenge_type")
+  difficulty        Difficulty      @default(INTERMEDIATE)
+  points            Int             @default(100)
+  timeLimit         Int?            @map("time_limit") // in minutes
+  displayOrder      Int             @default(1) @map("display_order")
+  hints             Json?           // Array of hint items [{ id, orderIndex, content, penaltyPercent }]
+  referenceMaterial String?         @db.Text @map("reference_material")
+  solutionData      Json?           @map("solution_data") // Hidden correct answers, rules, checklist (server-side only)
+  explanation       String?         @db.Text // Post-completion explanation
+  evaluationType    EvaluationType  @default(COMMAND_EXIT_CODE) @map("evaluation_type")
+  status            ChallengeStatus @default(ACTIVE)
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
 
   labTemplate LabTemplate           @relation(fields: [labTemplateId], references: [id], onDelete: Cascade)
   tasks       ChallengeTask[]
@@ -387,19 +410,24 @@ model ChallengeSubmission {
   id             String           @id @default(uuid()) @db.Uuid
   studentId      String           @map("student_id") @db.Uuid
   challengeId    String           @map("challenge_id") @db.Uuid
-  labSessionId   String           @map("lab_session_id") @db.Uuid
+  workshopId     String?          @map("workshop_id") @db.Uuid
+  labSessionId   String?          @map("lab_session_id") @db.Uuid
   submissionData Json             @map("submission_data")
   score          Int              @default(0)
   status         SubmissionStatus @default(PENDING)
+  feedback       String?          @db.Text
+  pointsAwarded  Int              @default(0) @map("points_awarded")
   submittedAt    DateTime         @default(now()) @map("submitted_at")
   evaluatedAt    DateTime?        @map("evaluated_at")
 
   student    User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   challenge  Challenge   @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  labSession LabSession  @relation(fields: [labSessionId], references: [id], onDelete: Cascade)
+  labSession LabSession? @relation(fields: [labSessionId], references: [id], onDelete: Cascade)
+  workshop   Workshop?   @relation(fields: [workshopId], references: [id], onDelete: Cascade)
 
   @@index([studentId])
   @@index([challengeId])
+  @@index([workshopId])
   @@index([labSessionId])
   @@map("challenge_submissions")
 }
@@ -414,6 +442,7 @@ model StudentProgress {
   totalChallenges      Int       @default(0) @map("total_challenges")
   totalPoints          Int       @default(0) @map("total_points")
   completionPercentage Float     @default(0.0) @map("completion_percentage")
+  challengeProgress    Json?     @map("challenge_progress") // Map of challengeId -> { status, score, attempts, completedAt }
   completedAt          DateTime? @map("completed_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
 
