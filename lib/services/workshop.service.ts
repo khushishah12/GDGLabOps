@@ -5,6 +5,12 @@ import { createWorkshopSchema, updateWorkshopSchema } from '@/lib/validations';
 import { generateUniqueJoiningCode } from '@/lib/workshop/joining-code';
 import { computeEffectiveWorkshopStatus } from '@/lib/workshop/lifecycle';
 import { WorkshopStatus, VenueType, Difficulty } from '@prisma/client';
+import {
+  getProfileForCategory,
+  validateAndResolveTools,
+  ENVIRONMENT_PROFILES,
+  EnvironmentProfileId,
+} from '@/lib/workshop/tool-catalogue';
 
 export class WorkshopService {
   /**
@@ -46,7 +52,18 @@ export class WorkshopService {
       }
     }
 
-    // 4. Create workshop record inside transaction
+    // 4. Resolve environment profile & initial approved tools
+    const profileId: EnvironmentProfileId =
+      data.environmentProfile || getProfileForCategory(data.domain);
+
+    const initialTools =
+      data.requiredTools && data.requiredTools.length > 0
+        ? data.requiredTools
+        : ENVIRONMENT_PROFILES[profileId]?.defaultToolIds || [];
+
+    const toolResolution = validateAndResolveTools(profileId, initialTools);
+
+    // 5. Create workshop record inside transaction
     return prisma.$transaction(async (tx) => {
       const workshop = await tx.workshop.create({
         data: {
@@ -60,6 +77,10 @@ export class WorkshopService {
           difficulty: (data.difficulty as Difficulty) || Difficulty.BEGINNER,
           bannerUrl: data.bannerUrl || null,
           tags: data.tags || [],
+          environmentProfile: profileId,
+          requiredTools: toolResolution.resolvedToolIds as any,
+          environmentStatus: 'READY',
+          environmentVersion: 1,
           startDate: new Date(data.startDate),
           endDate: new Date(data.endDate),
           duration: data.duration,
@@ -363,7 +384,21 @@ export class WorkshopService {
    * Update workshop details
    */
   static async update(id: string, data: z.infer<typeof updateWorkshopSchema>) {
-    await this.getById(id);
+    const existing = await this.getById(id);
+
+    let toolUpdate: any = {};
+    if (data.requiredTools !== undefined || data.environmentProfile !== undefined || data.domain !== undefined) {
+      const targetProfile = (data.environmentProfile || existing.environmentProfile || getProfileForCategory(data.domain || existing.domain)) as EnvironmentProfileId;
+      const targetTools = data.requiredTools || (existing.requiredTools as string[]) || ENVIRONMENT_PROFILES[targetProfile]?.defaultToolIds || [];
+      const resolved = validateAndResolveTools(targetProfile, targetTools);
+
+      toolUpdate = {
+        environmentProfile: targetProfile,
+        requiredTools: resolved.resolvedToolIds as any,
+        environmentStatus: 'READY',
+        environmentVersion: { increment: 1 },
+      };
+    }
 
     return prisma.workshop.update({
       where: { id },
@@ -392,6 +427,29 @@ export class WorkshopService {
         ...(data.isPublic !== undefined ? { isPublic: data.isPublic } : {}),
         ...(data.codeJoinEnabled !== undefined ? { codeJoinEnabled: data.codeJoinEnabled } : {}),
         ...(data.status ? { status: data.status as WorkshopStatus } : {}),
+        ...toolUpdate,
+      },
+    });
+  }
+
+  /**
+   * Dedicated Workshop Tool Manager update method
+   */
+  static async updateWorkshopTools(workshopId: string, toolIds: string[]) {
+    const workshop = await this.getById(workshopId);
+    const profileId = (workshop.environmentProfile || getProfileForCategory(workshop.domain)) as EnvironmentProfileId;
+    const resolved = validateAndResolveTools(profileId, toolIds);
+
+    if (!resolved.valid) {
+      throw new ValidationError(`Tool selection invalid: ${resolved.errors.join('; ')}`);
+    }
+
+    return prisma.workshop.update({
+      where: { id: workshopId },
+      data: {
+        requiredTools: resolved.resolvedToolIds as any,
+        environmentStatus: 'READY',
+        environmentVersion: { increment: 1 },
       },
     });
   }

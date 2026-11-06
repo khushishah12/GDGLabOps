@@ -14,6 +14,13 @@ import { useToast } from '@/lib/toast-context';
 import { useUser } from '@/lib/user-context';
 import { useWorkshopRealtime } from '@/lib/hooks/use-workshop-realtime';
 import {
+  ENVIRONMENT_PROFILES,
+  TOOL_CATALOGUE,
+  EnvironmentProfileId,
+  getProfileForCategory,
+  ApprovedWorkshopCategory,
+} from '@/lib/workshop/tool-catalogue';
+import {
   Terminal as TerminalIcon,
   Play,
   RotateCcw,
@@ -38,6 +45,12 @@ import {
   Award,
   Megaphone,
   Send,
+  Monitor,
+  Layers,
+  Flame,
+  Database,
+  TerminalSquare,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface TerminalLine {
@@ -60,6 +73,9 @@ export default function InteractiveLabSessionPage() {
   const [remainingSeconds, setRemainingSeconds] = useState<number>(3600);
   const [isTerminating, setIsTerminating] = useState(false);
   const [showTerminateConfirm, setShowTerminateConfirm] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [workspaceView, setWorkspaceView] = useState<'terminal' | 'desktop'>('terminal');
 
   // Live Real-Time Collaboration (Prompt 8)
   const [activeAnnouncement, setActiveAnnouncement] = useState<any>(null);
@@ -742,7 +758,298 @@ export default function InteractiveLabSessionPage() {
       return;
     }
 
-    // 15. SUDO WARNING
+    // 15. NMAP SCANNING
+    if (lower.startsWith('nmap')) {
+      const isTarget = lower.includes('10.0.5.20') || lower.includes('metasploitable') || parts.length === 1;
+      const scanOutput = isTarget
+        ? `Starting Nmap 7.94 ( https://nmap.org ) at ${new Date().toISOString().slice(0, 19).replace('T', ' ')} UTC\n` +
+          `Nmap scan report for metasploitable.lab.local (10.0.5.20)\n` +
+          `Host is up (0.00042s latency).\n` +
+          `Not shown: 992 closed tcp ports (reset)\n` +
+          `PORT     STATE SERVICE     VERSION\n` +
+          `21/tcp   open  ftp         vsftpd 2.3.4\n` +
+          `22/tcp   open  ssh         OpenSSH 4.7p1 Debian 8ubuntu1 (protocol 2.0)\n` +
+          `23/tcp   open  telnet      Linux telnetd\n` +
+          `25/tcp   open  smtp        Postfix smtpd\n` +
+          `80/tcp   open  http        Apache httpd 2.2.8 ((Ubuntu) DAV/2)\n` +
+          `139/tcp  open  netbios-ssn Samba smbd 3.X - 4.X\n` +
+          `445/tcp  open  netbios-ssn Samba smbd 3.X - 4.X\n` +
+          `3306/tcp open  mysql       MySQL 5.0.51a-3ubuntu5\n` +
+          `Service Info: Host: metasploitable-target; OSs: Unix, Linux\n\n` +
+          `Nmap done: 1 IP address (1 host up) scanned in 1.48 seconds`
+        : `Starting Nmap 7.94 ( https://nmap.org )\nNmap done: 0 IP addresses scanned. Tip: Scan isolated target with "nmap 10.0.5.20"`;
+
+      setTerminalLines((prev) => [
+        ...prev,
+        { id: `out-${Date.now()}`, type: 'output', text: scanOutput },
+      ]);
+      return;
+    }
+
+    // 16. METASPLOIT FRAMEWORK & EXPLOITATION
+    if (lower.startsWith('msfconsole') || lower === 'msf') {
+      setTerminalLines((prev) => [
+        ...prev,
+        {
+          id: `out-${Date.now()}`,
+          type: 'output',
+          text:
+            `\n  =[ metasploit v6.3.24-dev                          ]\n` +
+            `+ -- --=[ 2341 exploits - 1215 auxiliary - 410 post       ]\n` +
+            `+ -- --=[ 1385 payloads - 46 encoders - 11 nops           ]\n` +
+            `+ -- --=[ 9 evasion                                       ]\n\n` +
+            `msf6 > Ready. Isolated practice target reachable at 10.0.5.20\n` +
+            `Commands to test:\n` +
+            `  use exploit/unix/ftp/vsftpd_234_backdoor\n` +
+            `  set rhosts 10.0.5.20\n` +
+            `  exploit\n`,
+        },
+      ]);
+      return;
+    }
+
+    if (lower.startsWith('use exploit') || lower.startsWith('use ')) {
+      setTerminalLines((prev) => [
+        ...prev,
+        {
+          id: `out-${Date.now()}`,
+          type: 'output',
+          text: `[*] Using configured payload cmd/unix/interact\nmsf6 exploit(unix/ftp/vsftpd_234_backdoor) > `,
+        },
+      ]);
+      return;
+    }
+
+    if (lower.startsWith('set rhosts') || lower.startsWith('set rhost')) {
+      setTerminalLines((prev) => [
+        ...prev,
+        { id: `out-${Date.now()}`, type: 'output', text: `RHOSTS => 10.0.5.20\nmsf6 exploit(unix/ftp/vsftpd_234_backdoor) > ` },
+      ]);
+      return;
+    }
+
+    if (lower === 'exploit' || lower === 'run') {
+      setTerminalLines((prev) => [
+        ...prev,
+        {
+          id: `out-${Date.now()}`,
+          type: 'success',
+          text:
+            `[*] 10.0.5.20:21 - Banner: 220 (vsFTPd 2.3.4)\n` +
+            `[*] 10.0.5.20:21 - USER: 331 Please specify the password.\n` +
+            `[+] 10.0.5.20:21 - Backdoor service spawned!\n` +
+            `[+] Found shell.\n` +
+            `[*] Command shell session 1 opened (10.0.5.10:45821 -> 10.0.5.20:6200)\n` +
+            `root@metasploitable:/# whoami\nroot\n` +
+            `root@metasploitable:/# (Exploit succeeded in isolated lab network)`,
+        },
+      ]);
+      success('Target Compromised! 🎯', 'Vulnerability verified on isolated Metasploitable 2 testbed.');
+      return;
+    }
+
+    // 17. PING TARGET VM
+    if (lower.startsWith('ping')) {
+      const ip = parts[1] || '10.0.5.20';
+      setTerminalLines((prev) => [
+        ...prev,
+        {
+          id: `out-${Date.now()}`,
+          type: 'output',
+          text:
+            `PING ${ip} (${ip}) 56(84) bytes of data.\n` +
+            `64 bytes from ${ip}: icmp_seq=1 ttl=64 time=0.342 ms\n` +
+            `64 bytes from ${ip}: icmp_seq=2 ttl=64 time=0.288 ms\n` +
+            `--- ${ip} ping statistics ---\n` +
+            `2 packets transmitted, 2 received, 0% packet loss, time 1002ms`,
+        },
+      ]);
+      return;
+    }
+
+    // 18. PIP LIST & PYTHON PACKAGES
+    if (lower === 'pip' || lower.startsWith('pip ')) {
+      if (lower.includes('list')) {
+        setTerminalLines((prev) => [
+          ...prev,
+          {
+            id: `out-${Date.now()}`,
+            type: 'output',
+            text:
+              `Package                  Version\n` +
+              `------------------------ -----------\n` +
+              `jupyterlab               4.1.5\n` +
+              `matplotlib               3.8.3\n` +
+              `mysql-connector-python   8.3.0\n` +
+              `numpy                    1.26.4\n` +
+              `pandas                   2.2.1\n` +
+              `pip                      24.0\n` +
+              `scikit-learn             1.4.1.post1\n` +
+              `seaborn                  0.13.2`,
+          },
+        ]);
+        return;
+      }
+      setTerminalLines((prev) => [
+        ...prev,
+        { id: `out-${Date.now()}`, type: 'output', text: `pip 24.0 from /usr/local/lib/python3.11/site-packages/pip (python 3.11)` },
+      ]);
+      return;
+    }
+
+    // 19. MYSQL CLIENT
+    if (lower.startsWith('mysql')) {
+      setTerminalLines((prev) => [
+        ...prev,
+        {
+          id: `out-${Date.now()}`,
+          type: 'output',
+          text:
+            `Welcome to the MySQL monitor.  Commands end with ; or \\g.\n` +
+            `Your MySQL connection id is 14\n` +
+            `Server version: 8.0.36 MySQL Community Server - GPL\n\n` +
+            `Copyright (c) 2000, 2024, Oracle and/or its affiliates.\n\n` +
+            `Type 'help;' or '\\h' for help. Type '\\c' to clear the current input statement.\n\n` +
+            `mysql> Connected to local MySQL Server on localhost:3306.\n` +
+            `mysql> Databases available: workshop_db, information_schema, performance_schema.\n` +
+            `mysql> Use "SELECT * FROM workshop_db.participants LIMIT 5;" or type exit to return to bash.`,
+        },
+      ]);
+      return;
+    }
+
+    // 20. JUPYTERLAB
+    if (lower.startsWith('jupyter')) {
+      setTerminalLines((prev) => [
+        ...prev,
+        {
+          id: `out-${Date.now()}`,
+          type: 'output',
+          text:
+            `[I ServerApp] Package jupyterlab 4.1.5 initialized\n` +
+            `[I ServerApp] Serving notebooks from local directory: /home/labuser/workspace\n` +
+            `[I ServerApp] Jupyter Server 2.13.0 is running at:\n` +
+            `[I ServerApp]     http://127.0.0.1:8888/lab?token=gdg-labops-student\n` +
+            `[I ServerApp] Notebook kernel: Python 3 (ipykernel 6.29.3)`,
+        },
+      ]);
+      return;
+    }
+
+    // 21. WIRESHARK & BURP SUITE
+    if (lower.startsWith('wireshark')) {
+      setTerminalLines((prev) => [
+        ...prev,
+        {
+          id: `out-${Date.now()}`,
+          type: 'output',
+          text:
+            `Wireshark 4.2.2 (Git v4.2.2 packaged as 4.2.2-1)\n` +
+            `Compiled (64-bit) with Qt 5.15.10, with libpcap.\n` +
+            `[NOTE] To view the Wireshark packet analysis GUI, switch to the "Remote Desktop (GUI)" tab above.`,
+        },
+      ]);
+      return;
+    }
+
+    if (lower.startsWith('burpsuite') || lower.startsWith('burp')) {
+      setTerminalLines((prev) => [
+        ...prev,
+        {
+          id: `out-${Date.now()}`,
+          type: 'output',
+          text:
+            `Burp Suite Community Edition v2024.1.1\n` +
+            `Proxy service listening on 127.0.0.1:8080\n` +
+            `[NOTE] To interact with the Burp Suite GUI, switch to the "Remote Desktop (GUI)" tab above.`,
+        },
+      ]);
+      return;
+    }
+
+    // 22. NETCAT & NET-TOOLS
+    if (lower.startsWith('nc') || lower.startsWith('netcat')) {
+      setTerminalLines((prev) => [
+        ...prev,
+        {
+          id: `out-${Date.now()}`,
+          type: 'output',
+          text: `Connection to ${parts[1] || '10.0.5.20'} ${parts[2] || '21'} port [tcp/ftp] succeeded!`,
+        },
+      ]);
+      return;
+    }
+
+    // 23. GCC / C COMPILER & HTOP
+    if (lower.startsWith('gcc') || lower.startsWith('g++')) {
+      setTerminalLines((prev) => [
+        ...prev,
+        {
+          id: `out-${Date.now()}`,
+          type: 'output',
+          text: 'gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0\nCopyright (C) 2021 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.',
+        },
+      ]);
+      return;
+    }
+
+    if (lower === 'htop' || lower === 'top') {
+      setTerminalLines((prev) => [
+        ...prev,
+        {
+          id: `out-${Date.now()}`,
+          type: 'output',
+          text:
+            `Tasks: 8 total, 1 running, 7 sleeping, 0 stopped\n` +
+            `%Cpu(s):  1.2 us,  0.4 sy,  0.0 ni, 98.4 id,  0.0 wa\n` +
+            `MiB Mem :   2048.0 total,   1420.5 free,    380.2 used,    247.3 buff/cache\n\n` +
+            `  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND\n` +
+            `    1 labuser   20   0    2412    800    720 S   0.0   0.0   0:00.02 sandbox-init\n` +
+            `   12 labuser   20   0    5240   2100   1800 S   0.0   0.1   0:00.08 bash\n` +
+            `   45 labuser   20   0   14280   6120   4200 S   0.2   0.3   0:00.14 python3`,
+        },
+      ]);
+      return;
+    }
+
+    if (lower === 'tree') {
+      setTerminalLines((prev) => [
+        ...prev,
+        {
+          id: `out-${Date.now()}`,
+          type: 'output',
+          text:
+            `.\n` +
+            `├── README.md\n` +
+            `├── instructions.txt\n` +
+            `└── workspace\n` +
+            `    └── exercise.sh\n\n` +
+            `1 directory, 3 files`,
+        },
+      ]);
+      return;
+    }
+
+    // 24. DATASET PREVIEW
+    if (lower.includes('dataset.csv')) {
+      setTerminalLines((prev) => [
+        ...prev,
+        {
+          id: `out-${Date.now()}`,
+          type: 'output',
+          text:
+            `participant_id,workshop_track,modules_completed,lab_score,status\n` +
+            `1001,Cybersecurity,5,98,CERTIFIED\n` +
+            `1002,Data Science,4,92,CERTIFIED\n` +
+            `1003,Linux,5,95,CERTIFIED\n` +
+            `1004,Cybersecurity,3,80,IN_PROGRESS\n` +
+            `1005,Data Science,5,100,CERTIFIED`,
+        },
+      ]);
+      return;
+    }
+
+    // 25. SUDO WARNING
     if (lower.startsWith('sudo')) {
       setTerminalLines((prev) => [
         ...prev,
@@ -811,6 +1118,45 @@ export default function InteractiveLabSessionPage() {
     }
   };
 
+  // Reset Environment Handler
+  const handleResetEnvironment = async () => {
+    setIsResetting(true);
+    try {
+      if (sessionId && sessionId !== 'demo-session') {
+        const res = await fetch(`/api/sessions/${sessionId}/reset`, { method: 'POST' });
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          throw new Error(json.error || 'Failed to reset environment');
+        }
+      }
+      setSandboxState({
+        fileGroupChanged: false,
+        filePermsChanged: false,
+        secretRevealed: false,
+        rogueProcessKilled: false,
+      });
+      setTerminalLines((prev) => [
+        ...prev,
+        {
+          id: `rst-${Date.now()}`,
+          type: 'system',
+          text: '\n🔄 [ENVIRONMENT RESET] Storage, processes, and network namespaces restored to pristine state.\n',
+        },
+        {
+          id: `con-${Date.now()}`,
+          type: 'success',
+          text: `[CONNECTED] Cloud container attached: ${activeProfile.name} (Zero local configuration needed)`,
+        },
+      ]);
+      success('Environment Reset 🚀', 'Clean sandbox restored. Your earned points and milestones remain saved.');
+      setShowResetConfirm(false);
+    } catch (err: any) {
+      error('Reset Failed', err.message);
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   const minutesRemaining = Math.floor(remainingSeconds / 60);
   const secondsRemaining = remainingSeconds % 60;
   const timeFormatted = `${String(minutesRemaining).padStart(2, '0')}:${String(secondsRemaining).padStart(2, '0')}`;
@@ -819,6 +1165,17 @@ export default function InteractiveLabSessionPage() {
   const workshop = sessionData?.workshop;
   const challenges: any[] = template?.challenges || [];
   const currentChallenge = challenges[activeChallengeIdx] || challenges[0];
+
+  const activeProfileId = (sessionData?.environmentProfile as EnvironmentProfileId) ||
+    (sessionData?.workshop?.environmentProfile as EnvironmentProfileId) ||
+    (sessionData?.workshop?.domain ? getProfileForCategory(sessionData.workshop.domain) : 'LINUX_LAB');
+  const activeProfile = ENVIRONMENT_PROFILES[activeProfileId] || ENVIRONMENT_PROFILES.LINUX_LAB;
+
+  const configuredToolIds: string[] = (sessionData?.configuredTools as string[]) ||
+    (sessionData?.workshop?.requiredTools as string[]) ||
+    activeProfile.defaultToolIds;
+
+  const hasDesktopSupport = configuredToolIds.some((id) => TOOL_CATALOGUE[id]?.requiresDesktop) || activeProfile.desktopAccessSupported;
 
   return (
     <AppShell>
@@ -839,14 +1196,14 @@ export default function InteractiveLabSessionPage() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-bold text-sm text-slate-100">
-                  {template?.name || 'Linux Fundamentals & Shell Hardening'}
+                  {template?.name || activeProfile.name}
                 </span>
                 <Badge variant="outline" size="sm" className="bg-slate-800 text-slate-300 border-slate-700 font-mono text-[10px]">
-                  {sessionData?.environmentProfile || 'ubuntu-fundamentals'}
+                  {activeProfile.id}
                 </Badge>
               </div>
               <span className="text-[11px] text-slate-400 block">
-                {workshop?.title || 'Hands-on Linux & Cloud Shell Mastery'}
+                {workshop?.title || 'GDG Hands-on Cloud Workshop'}
               </span>
             </div>
           </div>
@@ -881,6 +1238,17 @@ export default function InteractiveLabSessionPage() {
               className="text-xs h-7 px-2.5 flex items-center gap-1 font-semibold border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
             >
               <HelpCircle className="w-3.5 h-3.5" /> Request Help
+            </Button>
+
+            {/* Reset Environment Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowResetConfirm(true)}
+              isLoading={isResetting}
+              className="text-xs h-7 px-2.5 flex items-center gap-1 font-semibold border-slate-700 hover:bg-slate-800 text-slate-300"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-blue-400" /> Reset
             </Button>
 
             {/* Stop Environment Button */}
@@ -949,11 +1317,69 @@ export default function InteractiveLabSessionPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           {/* Left Panel: Lab Guide, Challenges & Tasks */}
           <div
-            className={`lg:col-span-5 space-y-4 ${
+            className={`lg:col-span-5 space-y-3 ${
               mobileActiveTab === 'guide' ? 'block' : 'hidden lg:block'
             }`}
           >
-            <Card className="h-[620px] flex flex-col shadow-sm">
+            {/* Preinstalled Workshop Tools & Target Details */}
+            <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-2.5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-[#1a73e8] dark:text-[#4285F4]" />
+                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                    Preinstalled Tools ({configuredToolIds.length})
+                  </span>
+                </div>
+                <Badge variant="outline" size="sm" className="text-[10px] text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+                  Ready to Practice
+                </Badge>
+              </div>
+
+              {/* Tool Chips */}
+              <div className="flex flex-wrap gap-1.5">
+                {configuredToolIds.map((tId) => {
+                  const tool = TOOL_CATALOGUE[tId];
+                  return (
+                    <span
+                      key={tId}
+                      className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 flex items-center gap-1"
+                      title={tool?.description || tId}
+                    >
+                      <Check className="w-2.5 h-2.5 text-emerald-500" />
+                      {tool?.name || tId}
+                    </span>
+                  );
+                })}
+              </div>
+
+              {/* Cybersecurity Isolated Target Notice */}
+              {activeProfile.targetEnvironmentNotice && (
+                <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5 text-[11px]">
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
+                    Target Machine: 10.0.5.20 (Metasploitable 2)
+                  </div>
+                  <p className="text-[10px] text-amber-700 dark:text-amber-300/90 leading-tight">
+                    {activeProfile.targetEnvironmentNotice}
+                  </p>
+                </div>
+              )}
+
+              {/* Data Science Power BI Notice */}
+              {activeProfile.powerBiNotice && (
+                <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs text-blue-800 dark:text-blue-300 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5 text-[11px]">
+                    <Info className="w-3.5 h-3.5 text-[#4285F4]" />
+                    Power BI Web Integration
+                  </div>
+                  <p className="text-[10px] text-blue-700 dark:text-blue-300/90 leading-tight">
+                    {activeProfile.powerBiNotice}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <Card className="h-[520px] flex flex-col shadow-sm">
               <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-bold flex items-center gap-2">
@@ -1154,31 +1580,107 @@ export default function InteractiveLabSessionPage() {
             }`}
           >
             <Card className="h-[620px] flex flex-col bg-slate-950 border-slate-800 text-slate-100 overflow-hidden shadow-xl">
-              {/* Terminal Window Chrome */}
+              {/* Terminal Window Chrome & Access Switcher */}
               <div className="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
                     <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
                   </div>
-                  <span className="font-mono text-xs text-slate-400 ml-2">
-                    bash - labuser@gdg-sandbox:~
-                  </span>
+
+                  {hasDesktopSupport ? (
+                    <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[11px]">
+                      <button
+                        onClick={() => setWorkspaceView('terminal')}
+                        className={`px-2.5 py-1 rounded-md flex items-center gap-1.5 transition-colors ${
+                          workspaceView === 'terminal'
+                            ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        <TerminalIcon className="w-3 h-3" /> Web Terminal
+                      </button>
+                      <button
+                        onClick={() => setWorkspaceView('desktop')}
+                        className={`px-2.5 py-1 rounded-md flex items-center gap-1.5 transition-colors ${
+                          workspaceView === 'desktop'
+                            ? 'bg-purple-600 text-white font-semibold shadow-sm'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        <Monitor className="w-3 h-3" /> Remote Desktop (GUI)
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="font-mono text-xs text-slate-400 ml-2">
+                      bash - labuser@gdg-sandbox:~
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setTerminalLines([])}
-                    title="Clear Screen"
-                    className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition-colors"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  </button>
+                  {workspaceView === 'terminal' && (
+                    <button
+                      onClick={() => setTerminalLines([])}
+                      title="Clear Screen"
+                      className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition-colors"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Terminal Output Buffer */}
+              {workspaceView === 'desktop' ? (
+                /* Remote Desktop Display Viewer */
+                <div className="flex-1 bg-slate-900/95 flex flex-col justify-between p-4 relative overflow-hidden">
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-950/80 border border-slate-800 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="font-semibold text-slate-200">
+                        XFCE4 Remote Desktop • {activeProfile.name}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      Resolution: 1920x1080 • Stream: WebRTC / noVNC
+                    </span>
+                  </div>
+
+                  <div className="my-auto p-6 rounded-xl border border-slate-800 bg-slate-950/70 text-center space-y-4 max-w-lg mx-auto shadow-2xl">
+                    <div className="p-3 w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 mx-auto flex items-center justify-center">
+                      <Monitor className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-sm text-slate-100">
+                        Browser Remote Desktop Stream Connected
+                      </h4>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        GUI applications ({configuredToolIds.filter(id => TOOL_CATALOGUE[id]?.requiresDesktop).map(id => TOOL_CATALOGUE[id]?.name || id).join(', ') || 'Wireshark, Burp Suite'}) are accessible inside this sandboxed X11 virtual display.
+                      </p>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-left font-mono text-[11px] text-slate-300 space-y-1">
+                      <div className="text-emerald-400">✓ Display Server: X11 Virtual Framebuffer :1</div>
+                      <div className="text-slate-400">✓ Network Boundary: Isolated private lab subnet</div>
+                      <div className="text-slate-400">✓ Target Attached: 10.0.5.20 (Metasploitable)</div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => setWorkspaceView('terminal')}
+                      className="text-xs bg-[#1a73e8] hover:bg-[#1557b0] text-white"
+                      leftIcon={<TerminalIcon className="w-3.5 h-3.5" />}
+                    >
+                      Return to Interactive Web Terminal
+                    </Button>
+                  </div>
+
+                  <div className="text-center text-[10px] text-slate-500 font-mono">
+                    Zero local software needed. Environment streaming directly in browser.
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Terminal Output Buffer */}
               <div className="flex-1 p-4 font-mono text-xs overflow-y-auto space-y-1.5 selection:bg-blue-600 selection:text-white">
                 {terminalLines.map((line) => {
                   let color = 'text-slate-300';
@@ -1220,11 +1722,26 @@ export default function InteractiveLabSessionPage() {
                   <CornerDownLeft className="w-3.5 h-3.5" />
                 </button>
               </form>
-            </Card>
-          </div>
-        </div>
+            </>
+          )}
+        </Card>
+      </div>
+    </div>
 
-        {/* Terminate Confirmation Modal */}
+    {/* Reset Confirmation Modal */}
+    <ConfirmDialog
+      open={showResetConfirm}
+      onOpenChange={(open) => setShowResetConfirm(open)}
+      title="Reset Cloud Environment"
+      description="Are you sure you want to reset your environment? This will restore a pristine container filesystem and reset background daemons. Your verified milestone challenges and points will NOT be lost."
+      confirmLabel={isResetting ? 'Resetting...' : 'Reset Environment'}
+      cancelLabel="Cancel"
+      isDestructive={false}
+      isLoading={isResetting}
+      onConfirm={handleResetEnvironment}
+    />
+
+    {/* Terminate Confirmation Modal */}
         <ConfirmDialog
           open={showTerminateConfirm}
           onOpenChange={(open) => setShowTerminateConfirm(open)}

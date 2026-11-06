@@ -48,7 +48,10 @@ export class SessionService {
         workshopId: data.workshopId,
         labTemplateId: data.labTemplateId,
       },
-      include: { labTemplate: true },
+      include: {
+        labTemplate: true,
+        workshop: { select: { id: true, title: true, domain: true, environmentProfile: true, requiredTools: true } },
+      },
     });
 
     if (!workshopLab) {
@@ -56,8 +59,20 @@ export class SessionService {
     }
 
     const template = workshopLab.labTemplate;
-    const profileId = data.environmentProfile || template.environmentProfile || 'ubuntu-fundamentals';
+    const workshop = workshopLab.workshop;
+
+    const profileId =
+      data.environmentProfile ||
+      workshop.environmentProfile ||
+      template.environmentProfile ||
+      'LINUX_LAB';
     const profile = getApprovedImageProfile(profileId);
+
+    // Resolve tools & desktop requirements
+    const toolsList: string[] = Array.isArray(workshop.requiredTools) ? (workshop.requiredTools as string[]) : [];
+    const { TOOL_CATALOGUE } = await import('@/lib/workshop/tool-catalogue');
+    const hasDesktopTool = toolsList.some((tId) => TOOL_CATALOGUE[tId]?.requiresDesktop);
+    const accessMethod = hasDesktopTool ? 'desktop' : 'terminal';
 
     // 3. Enforce student concurrent session quota (Max 1 active running lab per student)
     const existingActive = await prisma.labSession.findFirst({
@@ -119,6 +134,8 @@ export class SessionService {
         labTemplateId: data.labTemplateId,
         status: 'PROVISIONING',
         environmentProfile: profile.id,
+        configuredTools: toolsList as any,
+        accessMethod,
         sessionToken,
         resourceLimits: profile.defaultLimits as any,
         startedAt: new Date(),
@@ -441,13 +458,91 @@ export class SessionService {
   }
 
   /**
+   * Reset environment session to fresh state (cleans filesystem and re-attaches container)
+   */
+  static async resetSession(sessionId: string, initiatorUserId?: string) {
+    const session = await prisma.labSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        workshop: { select: { id: true, title: true, environmentProfile: true, requiredTools: true } },
+        labTemplate: true,
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundError(`Lab session with ID "${sessionId}" not found`);
+    }
+
+    try {
+      await RunnerClientService.destroy(sessionId);
+    } catch {
+      // ignore
+    }
+
+    const profileId = session.environmentProfile || session.workshop.environmentProfile || 'LINUX_LAB';
+    const profile = getApprovedImageProfile(profileId);
+    const initialDurationMin = session.labTemplate?.estimatedDuration || profile.defaultLimits.maxDurationMinutes;
+
+    const runnerRes = await RunnerClientService.provision({
+      sessionId: session.id,
+      studentId: session.studentId,
+      workshopId: session.workshopId,
+      profileId: profile.id,
+      customMaxDurationMinutes: initialDurationMin,
+    });
+
+    const updated = await prisma.labSession.update({
+      where: { id: sessionId },
+      data: {
+        status: 'RUNNING',
+        containerReference: runnerRes.session.containerId,
+        connectionTicket: runnerRes.connection.ticket,
+        ticketExpiresAt: new Date(Date.now() + 5 * 60 * 1000),
+        accessUrl: runnerRes.connection.wsEndpoint,
+        startedAt: new Date(runnerRes.session.startedAt),
+        expiresAt: new Date(runnerRes.session.expiresAt),
+        stoppedAt: null,
+        terminatedAt: null,
+        lastActivityAt: new Date(),
+        events: {
+          create: {
+            eventType: 'SESSION_RESET',
+            message: `Environment reset to clean state by ${initiatorUserId || session.studentId}`,
+          },
+        },
+      },
+    });
+
+    await ActivityService.record({
+      workshopId: session.workshopId,
+      eventType: 'LAB_RESET',
+      actorId: initiatorUserId || session.studentId,
+      relatedEntityId: sessionId,
+      metadata: { profileId: profile.id },
+    });
+
+    return this.sanitizeSession(updated);
+  }
+
+  /**
    * Get session details with sanitized fields
    */
   static async getById(sessionId: string, studentId?: string) {
     const session = await prisma.labSession.findUnique({
       where: { id: sessionId },
       include: {
-        workshop: { select: { id: true, title: true, domain: true, organisationId: true } },
+        workshop: {
+          select: {
+            id: true,
+            title: true,
+            domain: true,
+            organisationId: true,
+            environmentProfile: true,
+            requiredTools: true,
+            environmentStatus: true,
+            environmentVersion: true,
+          },
+        },
         labTemplate: {
           include: {
             challenges: {

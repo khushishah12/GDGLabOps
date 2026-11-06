@@ -77,6 +77,8 @@ export const createWorkshopSchema = z
       .regex(/^[A-Z0-9_-]+$/, 'Registration code must be uppercase alphanumeric')
       .optional(),
     labTemplateIds: z.array(uuidSchema).optional(),
+    environmentProfile: z.enum(['CYBERSECURITY_LAB', 'DATA_SCIENCE_LAB', 'LINUX_LAB']).optional(),
+    requiredTools: z.array(z.string()).optional(),
     status: z.enum(['DRAFT', 'PUBLISHED']).default('DRAFT'),
   })
   .refine((data) => new Date(data.startDate) < new Date(data.endDate), {
@@ -123,6 +125,8 @@ export const updateWorkshopSchema = z
     requiresApproval: z.boolean().optional(),
     isPublic: z.boolean().optional(),
     codeJoinEnabled: z.boolean().optional(),
+    environmentProfile: z.enum(['CYBERSECURITY_LAB', 'DATA_SCIENCE_LAB', 'LINUX_LAB']).optional(),
+    requiredTools: z.array(z.string()).optional(),
     status: z.enum(['DRAFT', 'PUBLISHED', 'REGISTRATION_CLOSED', 'FULL', 'ONGOING', 'COMPLETED', 'CANCELLED']).optional(),
   })
   .refine(

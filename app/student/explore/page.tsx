@@ -32,13 +32,9 @@ import {
 
 const CATEGORY_PILLS = [
   'ALL',
-  'Cloud Computing',
-  'DevOps',
   'Cybersecurity',
-  'Web Development',
-  'Artificial Intelligence / Machine Learning',
-  'Open Source',
   'Data Science',
+  'Linux',
 ];
 
 interface PublicWorkshop {
@@ -65,6 +61,10 @@ interface PublicWorkshop {
   instructorName?: string;
   instructorBio?: string;
   requiresApproval: boolean;
+  environmentProfile?: string;
+  requiredTools?: string[];
+  environmentStatus?: string;
+  environmentVersion?: number;
   _count?: { registrations?: number };
 }
 
@@ -396,6 +396,39 @@ export default function StudentExplorePage() {
                             Speaker: <strong className="text-slate-600 dark:text-slate-300">{ws.instructorName}</strong>
                           </div>
                         )}
+
+                        {/* Cloud Environment & Tool Badges */}
+                        <div className="p-2 rounded-lg bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/50 dark:border-blue-900/30 space-y-1">
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="font-semibold text-[#1a73e8] dark:text-[#4285F4] uppercase tracking-wide">
+                              {ws.domain === 'Cybersecurity'
+                                ? '🛡️ Kali Linux Sandbox'
+                                : ws.domain === 'Data Science'
+                                ? '📊 Data Science & MySQL'
+                                : '🐧 Ubuntu Linux Sandbox'}
+                            </span>
+                            <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                              0 Device Setup
+                            </span>
+                          </div>
+                          {Array.isArray(ws.requiredTools) && ws.requiredTools.length > 0 && (
+                            <div className="flex flex-wrap gap-1 pt-0.5">
+                              {ws.requiredTools.slice(0, 4).map((toolId) => (
+                                <span
+                                  key={toolId}
+                                  className="text-[9px] font-mono px-1 py-0.2 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+                                >
+                                  {toolId}
+                                </span>
+                              ))}
+                              {ws.requiredTools.length > 4 && (
+                                <span className="text-[9px] text-slate-400">
+                                  +{ws.requiredTools.length - 4} more
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       {/* Capacity Bar */}

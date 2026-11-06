@@ -57,6 +57,10 @@ interface WorkshopItem {
   registrationDeadline: string;
   venueType: string;
   instructorName?: string;
+  environmentProfile?: string;
+  requiredTools?: string[];
+  environmentStatus?: string;
+  environmentVersion?: number;
   _count?: {
     registrations?: number;
   };
@@ -328,14 +332,10 @@ export default function WorkshopListingPage() {
                 value={selectedDomain}
                 onChange={(e) => setSelectedDomain(e.target.value)}
                 options={[
-                  { value: 'ALL', label: 'All Domains' },
-                  { value: 'Cloud Computing', label: 'Cloud Computing' },
-                  { value: 'DevOps', label: 'DevOps' },
+                  { value: 'ALL', label: 'All Categories' },
                   { value: 'Cybersecurity', label: 'Cybersecurity' },
-                  { value: 'Web Development', label: 'Web Development' },
-                  { value: 'Artificial Intelligence / Machine Learning', label: 'AI & ML' },
-                  { value: 'Open Source', label: 'Open Source' },
                   { value: 'Data Science', label: 'Data Science' },
+                  { value: 'Linux', label: 'Linux' },
                 ]}
                 className="h-9 text-xs"
               />
@@ -486,6 +486,18 @@ export default function WorkshopListingPage() {
                           Instructor: <strong className="text-slate-600 dark:text-slate-300">{ws.instructorName}</strong>
                         </div>
                       )}
+
+                      {/* Environment & Tools Badge */}
+                      <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-[#1a73e8] dark:text-[#4285F4] border border-blue-200/50 dark:border-blue-900/40">
+                          {ws.environmentProfile || (ws.domain === 'Cybersecurity' ? 'CYBERSECURITY_LAB' : ws.domain === 'Data Science' ? 'DATA_SCIENCE_LAB' : 'LINUX_LAB')}
+                        </span>
+                        {Array.isArray(ws.requiredTools) && ws.requiredTools.length > 0 && (
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                            • {ws.requiredTools.length} preconfigured tools
+                          </span>
+                        )}
+                      </div>
                     </CardContent>
                   </div>
 

@@ -300,6 +300,10 @@ model Workshop {
   registrationCode     String         @unique @map("registration_code")
 
   status               WorkshopStatus @default(DRAFT)
+  environmentProfile   String         @default("LINUX_LAB") @map("environment_profile")
+  requiredTools        Json?          @map("required_tools")
+  environmentStatus    String         @default("READY") @map("environment_status")
+  environmentVersion   Int            @default(1) @map("environment_version")
   createdAt            DateTime       @default(now()) @map("created_at")
   updatedAt            DateTime       @updatedAt @map("updated_at")
 
@@ -465,6 +469,8 @@ model LabSession {
   runnerUrl          String?       @map("runner_url")
   runnerId           String?       @map("runner_id")
   environmentProfile String?       @map("environment_profile")
+  configuredTools    Json?         @map("configured_tools")
+  accessMethod       String        @default("terminal") @map("access_method")
   sessionToken       String?       @unique @map("session_token")
   connectionTicket   String?       @map("connection_ticket")
   ticketExpiresAt    DateTime?     @map("ticket_expires_at")

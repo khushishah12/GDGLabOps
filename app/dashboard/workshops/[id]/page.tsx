@@ -12,6 +12,13 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { useToast } from '@/lib/toast-context';
 import {
+  ApprovedWorkshopCategory,
+  EnvironmentProfileId,
+  ENVIRONMENT_PROFILES,
+  getProfileForCategory,
+} from '@/lib/workshop/tool-catalogue';
+import { WorkshopToolManager } from '@/components/workshop/workshop-tool-manager';
+import {
   ArrowLeft,
   Calendar,
   Clock,
@@ -67,6 +74,10 @@ export default function WorkshopDetailPage() {
   const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [isAttaching, setIsAttaching] = useState(false);
+
+  // Workshop Tool Manager State
+  const [selectedTools, setSelectedTools] = useState<string[]>([]);
+  const [isSavingTools, setIsSavingTools] = useState(false);
 
   const fetchAttachedLabs = async () => {
     if (!workshopId) return;
@@ -201,12 +212,38 @@ export default function WorkshopDetailPage() {
           setEditInstructor(json.data.instructorName || '');
           setEditInstructorBio(json.data.instructorBio || '');
           setEditVenueAddress(json.data.venueAddress || '');
+
+          const pId = (json.data.environmentProfile as EnvironmentProfileId) || getProfileForCategory(json.data.domain);
+          const initialTools = (json.data.requiredTools as string[] | null) || ENVIRONMENT_PROFILES[pId]?.defaultToolIds || [];
+          setSelectedTools(initialTools);
         }
       }
     } catch (err: any) {
       error('Fetch Error', 'Failed to retrieve workshop details.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSaveTools = async (toolIds: string[]) => {
+    setIsSavingTools(true);
+    try {
+      const res = await fetch(`/api/workshops/${workshopId}/tools`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolIds }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        success('Workshop Toolset Updated 🛠️', 'Container dependencies and access method recalculated.');
+        fetchWorkshop();
+      } else {
+        error('Tool Update Failed', json.error || 'Could not save toolset');
+      }
+    } catch (err: any) {
+      error('Network Error', err.message || 'Could not communicate with backend');
+    } finally {
+      setIsSavingTools(false);
     }
   };
 
@@ -556,6 +593,31 @@ export default function WorkshopDetailPage() {
               </Button>
             </Link>
           </Card>
+        </div>
+
+        {/* Workshop Environment & Tool Manager */}
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#4285F4]" />
+                Cloud Environment & Preinstalled Toolset
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Customise the preinstalled tools for this workshop. Students receive this exact environment ready-to-run in their browser.
+              </p>
+            </div>
+          </div>
+
+          <WorkshopToolManager
+            category={workshop.domain as ApprovedWorkshopCategory}
+            selectedToolIds={selectedTools.length > 0 ? selectedTools : (workshop.requiredTools || [])}
+            onChange={(tools) => setSelectedTools(tools)}
+            onSave={handleSaveTools}
+            isSaving={isSavingTools}
+            environmentVersion={workshop.environmentVersion || 1}
+            environmentStatus={workshop.environmentStatus || 'READY'}
+          />
         </div>
 
         {/* Attached Lab Curricula & Practical Templates */}

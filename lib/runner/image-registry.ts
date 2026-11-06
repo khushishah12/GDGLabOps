@@ -39,6 +39,99 @@ export interface ApprovedImageProfile {
 }
 
 export const APPROVED_IMAGE_REGISTRY: Record<string, ApprovedImageProfile> = {
+  'LINUX_LAB': {
+    id: 'LINUX_LAB',
+    name: 'Linux Administration & Shell Lab',
+    description: 'POSIX shell environment with Ubuntu 22.04, bash, git, gcc, python, vim, nano, and net-tools.',
+    domain: 'Linux',
+    imageTag: 'ubuntu:22.04',
+    entrypointShell: '/bin/bash',
+    workingDir: '/home/labuser',
+    defaultLimits: {
+      nanoCpus: 1_000_000_000,
+      memoryMb: 1024,
+      memorySwapMb: 1024,
+      pidsLimit: 96,
+      tmpfsSizeMb: 128,
+      maxDurationMinutes: 90,
+      idleTimeoutMinutes: 20,
+    },
+    security: {
+      user: '1000:1000',
+      capDrop: ['ALL'],
+      capAdd: ['CHOWN', 'SETUID', 'SETGID', 'DAC_OVERRIDE'],
+      noNewPrivileges: true,
+      networkMode: 'bridge',
+      readOnlyRootFilesystem: false,
+      tmpfsMounts: {
+        '/tmp': 'rw,nosuid,nodev,size=128m',
+        '/run': 'rw,nosuid,nodev,size=16m',
+      },
+    },
+  },
+
+  'CYBERSECURITY_LAB': {
+    id: 'CYBERSECURITY_LAB',
+    name: 'Cybersecurity Laboratory (Kali Linux)',
+    description: 'Offensive and defensive security sandbox running Kali Linux with Metasploit, Nmap, and network analysis tools.',
+    domain: 'Cybersecurity',
+    imageTag: 'kalilinux/kali-rolling:latest',
+    entrypointShell: '/bin/bash',
+    workingDir: '/home/labuser',
+    defaultLimits: {
+      nanoCpus: 1_500_000_000,
+      memoryMb: 2048,
+      memorySwapMb: 2048,
+      pidsLimit: 128,
+      tmpfsSizeMb: 256,
+      maxDurationMinutes: 120,
+      idleTimeoutMinutes: 30,
+    },
+    security: {
+      user: '1000:1000',
+      capDrop: ['ALL'],
+      capAdd: ['NET_RAW', 'NET_ADMIN', 'CHOWN', 'SETUID', 'SETGID'],
+      noNewPrivileges: true,
+      networkMode: 'bridge',
+      readOnlyRootFilesystem: false,
+      tmpfsMounts: {
+        '/tmp': 'rw,nosuid,nodev,size=256m',
+        '/run': 'rw,nosuid,nodev,size=32m',
+      },
+    },
+  },
+
+  'DATA_SCIENCE_LAB': {
+    id: 'DATA_SCIENCE_LAB',
+    name: 'Data Science & Analytics Workspace',
+    description: 'Python 3.11 environment preloaded with JupyterLab, NumPy, Pandas, Matplotlib, Seaborn, Scikit-learn, and MySQL.',
+    domain: 'Data Science',
+    imageTag: 'python:3.11-slim',
+    entrypointShell: '/bin/bash',
+    workingDir: '/home/labuser',
+    defaultLimits: {
+      nanoCpus: 2_000_000_000,
+      memoryMb: 2048,
+      memorySwapMb: 2048,
+      pidsLimit: 128,
+      tmpfsSizeMb: 256,
+      maxDurationMinutes: 120,
+      idleTimeoutMinutes: 30,
+    },
+    security: {
+      user: '1000:1000',
+      capDrop: ['ALL'],
+      capAdd: ['CHOWN', 'SETUID', 'SETGID'],
+      noNewPrivileges: true,
+      networkMode: 'bridge',
+      readOnlyRootFilesystem: false,
+      tmpfsMounts: {
+        '/tmp': 'rw,nosuid,nodev,size=256m',
+        '/run': 'rw,nosuid,nodev,size=32m',
+      },
+    },
+  },
+
   'ubuntu-fundamentals': {
     id: 'ubuntu-fundamentals',
     name: 'Linux & Ubuntu Fundamentals',
@@ -198,10 +291,26 @@ export const APPROVED_IMAGE_REGISTRY: Record<string, ApprovedImageProfile> = {
  * Throws an error or falls back to ubuntu-fundamentals.
  */
 export function getApprovedImageProfile(profileId?: string | null): ApprovedImageProfile {
-  if (!profileId || !APPROVED_IMAGE_REGISTRY[profileId]) {
-    return APPROVED_IMAGE_REGISTRY['ubuntu-fundamentals'];
+  if (!profileId) {
+    return APPROVED_IMAGE_REGISTRY['LINUX_LAB'] || APPROVED_IMAGE_REGISTRY['ubuntu-fundamentals'];
   }
-  return APPROVED_IMAGE_REGISTRY[profileId];
+
+  // Profile alias mapping
+  if (profileId === 'CYBERSECURITY_LAB' || profileId === 'kali-cybersecurity') {
+    return APPROVED_IMAGE_REGISTRY['CYBERSECURITY_LAB'] || APPROVED_IMAGE_REGISTRY['cyber-fundamentals'];
+  }
+  if (profileId === 'DATA_SCIENCE_LAB' || profileId === 'python-datascience') {
+    return APPROVED_IMAGE_REGISTRY['DATA_SCIENCE_LAB'] || APPROVED_IMAGE_REGISTRY['python-dev'];
+  }
+  if (profileId === 'LINUX_LAB' || profileId === 'ubuntu-fundamentals') {
+    return APPROVED_IMAGE_REGISTRY['LINUX_LAB'] || APPROVED_IMAGE_REGISTRY['ubuntu-fundamentals'];
+  }
+
+  return (
+    APPROVED_IMAGE_REGISTRY[profileId] ||
+    APPROVED_IMAGE_REGISTRY['LINUX_LAB'] ||
+    APPROVED_IMAGE_REGISTRY['ubuntu-fundamentals']
+  );
 }
 
 /**

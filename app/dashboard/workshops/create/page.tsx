@@ -13,6 +13,15 @@ import { useToast } from '@/lib/toast-context';
 import { useUser } from '@/lib/user-context';
 import { mockLabTemplates } from '@/lib/mock-data';
 import {
+  APPROVED_WORKSHOP_CATEGORIES,
+  ApprovedWorkshopCategory,
+  EnvironmentProfileId,
+  ENVIRONMENT_PROFILES,
+  getProfileForCategory,
+  validateAndResolveTools,
+} from '@/lib/workshop/tool-catalogue';
+import { WorkshopToolManager } from '@/components/workshop/workshop-tool-manager';
+import {
   ArrowLeft,
   Save,
   Sparkles,
@@ -51,9 +60,13 @@ export default function CreateWorkshopPage() {
   const [title, setTitle] = useState('');
   const [shortDescription, setShortDescription] = useState('');
   const [description, setDescription] = useState('');
-  const [domain, setDomain] = useState('Cloud Computing');
+  const [domain, setDomain] = useState<ApprovedWorkshopCategory>('Cybersecurity');
+  const [environmentProfile, setEnvironmentProfile] = useState<EnvironmentProfileId>('CYBERSECURITY_LAB');
+  const [selectedToolIds, setSelectedToolIds] = useState<string[]>(
+    ENVIRONMENT_PROFILES['CYBERSECURITY_LAB'].defaultToolIds
+  );
   const [difficulty, setDifficulty] = useState<'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED'>('BEGINNER');
-  const [tagsInput, setTagsInput] = useState('Docker, Linux, Google Cloud');
+  const [tagsInput, setTagsInput] = useState('Kali Linux, Nmap, Metasploit, Security');
   const [bannerUrl, setBannerUrl] = useState(
     'https://images.unsplash.com/photo-1629654297299-c8506221ca97?w=800&auto=format&fit=crop&q=80'
   );
@@ -176,6 +189,8 @@ export default function CreateWorkshopPage() {
       shortDescription: shortDescription.trim() || title.trim(),
       description: description.trim(),
       domain,
+      environmentProfile,
+      requiredTools: selectedToolIds,
       difficulty,
       tags: parsedTags,
       bannerUrl: bannerUrl || undefined,
@@ -312,18 +327,19 @@ export default function CreateWorkshopPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Select
-                label="Technical Domain"
+                label="Workshop Category & Environment Track"
                 value={domain}
-                onChange={(e) => setDomain(e.target.value)}
+                onChange={(e) => {
+                  const newCategory = e.target.value as ApprovedWorkshopCategory;
+                  setDomain(newCategory);
+                  const newProfile = getProfileForCategory(newCategory);
+                  setEnvironmentProfile(newProfile);
+                  setSelectedToolIds(ENVIRONMENT_PROFILES[newProfile].defaultToolIds);
+                }}
                 options={[
-                  { value: 'Cloud Computing', label: 'Cloud Computing (GCP, K8s)' },
-                  { value: 'DevOps', label: 'DevOps & CI/CD' },
-                  { value: 'Cybersecurity', label: 'Cybersecurity & CTF' },
-                  { value: 'Web Development', label: 'Web Development' },
-                  { value: 'Artificial Intelligence / Machine Learning', label: 'AI & Machine Learning' },
-                  { value: 'Open Source', label: 'Open Source' },
-                  { value: 'Data Science', label: 'Data Science & BigQuery' },
-                  { value: 'Other', label: 'Other Technical Track' },
+                  { value: 'Cybersecurity', label: 'Cybersecurity (Kali Linux, Pentesting & CTF)' },
+                  { value: 'Data Science', label: 'Data Science (Python, Jupyter, Pandas, MySQL)' },
+                  { value: 'Linux', label: 'Linux (Ubuntu, Shell, Git, GCC, System Admin)' },
                 ]}
               />
 
@@ -360,7 +376,31 @@ export default function CreateWorkshopPage() {
           </CardContent>
         </Card>
 
-        {/* 2. Schedule, Timezone & Venue */}
+        {/* 2. Workshop Environment & Tool Manager */}
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-[#4285F4]" />
+                Workshop Environment & Tool Selection
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Customise preinstalled tools for your students. All tools are provisioned automatically in the browser with 0 student configuration.
+              </p>
+            </div>
+          </div>
+
+          <WorkshopToolManager
+            category={domain}
+            selectedToolIds={selectedToolIds}
+            onChange={(tools, prof) => {
+              setSelectedToolIds(tools);
+              setEnvironmentProfile(prof);
+            }}
+          />
+        </div>
+
+        {/* 3. Schedule, Timezone & Venue */}
         <Card>
           <CardHeader>
             <CardTitle>Schedule, Timezone & Delivery</CardTitle>

@@ -94,14 +94,16 @@ async function main() {
   // 4. Seed 3 Lab Templates
   const template1 = await prisma.labTemplate.upsert({
     where: { id: '00000000-0000-0000-0000-000000000001' },
-    update: {},
+    update: {
+      domain: 'Linux',
+    },
     create: {
       id: '00000000-0000-0000-0000-000000000001',
       organisationId: organisation.id,
       createdBy: organiser.id,
       name: 'Linux Fundamentals & Shell Hardening',
-      description: 'Master core POSIX permissions, user isolation, systemd management, and security auditing in a minimal Alpine Linux container.',
-      domain: 'DevOps',
+      description: 'Master core POSIX permissions, user isolation, systemd management, and security auditing in a minimal Ubuntu Linux container.',
+      domain: 'Linux',
       difficulty: Difficulty.BEGINNER,
       estimatedDuration: 90,
       environmentType: 'terminal',
@@ -116,44 +118,50 @@ async function main() {
 
   const template2 = await prisma.labTemplate.upsert({
     where: { id: '00000000-0000-0000-0000-000000000002' },
-    update: {},
+    update: {
+      domain: 'Cybersecurity',
+    },
     create: {
       id: '00000000-0000-0000-0000-000000000002',
       organisationId: organisation.id,
       createdBy: organiser.id,
       name: 'Web Application Vulnerability & Penetration Testing',
-      description: 'Hands-on offensive and defensive cybersecurity lab analyzing SQL injections, IDOR, SSRF, and JWT forgery in a sandboxed target.',
+      description: 'Hands-on offensive and defensive cybersecurity lab analyzing SQL injections, IDOR, SSRF, and Metasploitable targets in an isolated sandbox.',
       domain: 'Cybersecurity',
       difficulty: Difficulty.INTERMEDIATE,
       estimatedDuration: 105,
       environmentType: 'terminal',
       learningObjectives: [
-        'Intercept and analyze HTTP headers via CLI',
-        'Detect and remediate SQL Injection vulnerabilities',
-        'Patch insecure direct object reference patterns',
+        'Scan isolated testbed using nmap and enumerate services',
+        'Detect and remediate vulnerable daemons using Metasploit Framework',
+        'Inspect packet telemetry and network sockets',
       ],
-      prerequisites: ['Basic HTTP protocol knowledge'],
+      prerequisites: ['Basic networking knowledge'],
     },
   });
 
   const template3 = await prisma.labTemplate.upsert({
     where: { id: '00000000-0000-0000-0000-000000000003' },
-    update: {},
+    update: {
+      name: 'Data Science Analytics & Relational Databases',
+      domain: 'Data Science',
+    },
     create: {
       id: '00000000-0000-0000-0000-000000000003',
       organisationId: organisation.id,
       createdBy: organiser.id,
-      name: 'Containerization & Kubernetes Microservices',
-      description: 'Build multi-stage Dockerfiles, configure custom ingress controllers, and debug distributed service mesh routing.',
-      domain: 'Cloud Computing',
+      name: 'Data Science Analytics & Relational Databases',
+      description: 'Perform exploratory data analysis with JupyterLab, Pandas, NumPy, and execute SQL analytics on a live MySQL database.',
+      domain: 'Data Science',
       difficulty: Difficulty.INTERMEDIATE,
       estimatedDuration: 120,
       environmentType: 'terminal',
       learningObjectives: [
-        'Deploy Pods, Deployments, and ClusterIP Services in k3s',
-        'Configure ConfigMaps, Secrets, and PersistentVolumeClaims',
+        'Perform data wrangling and statistical summaries with Pandas',
+        'Query relational workshop datasets in MySQL Server',
+        'Train baseline machine learning classifiers with Scikit-learn',
       ],
-      prerequisites: ['Docker CLI basics'],
+      prerequisites: ['Basic Python programming familiarity'],
     },
   });
   console.log('[Seed]: 3 Lab Templates verified');
@@ -230,18 +238,28 @@ async function main() {
   });
   console.log('[Seed]: Challenges & predefined tasks verified');
 
-  // 6. Seed 3 Workshops
+  // 6. Seed 3 Workshops (Cybersecurity, Data Science, Linux)
   const now = new Date();
   const workshop1 = await prisma.workshop.upsert({
     where: { slug: 'hands-on-linux-cloud-shell-mastery' },
-    update: {},
+    update: {
+      domain: 'Linux',
+      environmentProfile: 'LINUX_LAB',
+      requiredTools: ['ubuntu-22.04', 'bash', 'git', 'gcc', 'python-linux', 'vim', 'nano', 'net-tools', 'htop', 'tree'],
+      environmentStatus: 'READY',
+      environmentVersion: 1,
+    },
     create: {
       organisationId: organisation.id,
       organiserId: organiser.id,
       title: 'Hands-on Linux & Cloud Shell Mastery',
       slug: 'hands-on-linux-cloud-shell-mastery',
-      description: 'A deep-dive practical workshop where university developers gain battle-tested Linux systems administration skills, process control, and container hardening.',
-      domain: 'DevOps',
+      description: 'A deep-dive practical workshop where university developers gain battle-tested Linux systems administration skills, POSIX file security, process control, and container hardening.',
+      domain: 'Linux',
+      environmentProfile: 'LINUX_LAB',
+      requiredTools: ['ubuntu-22.04', 'bash', 'git', 'gcc', 'python-linux', 'vim', 'nano', 'net-tools', 'htop', 'tree'],
+      environmentStatus: 'READY',
+      environmentVersion: 1,
       bannerUrl: 'https://images.unsplash.com/photo-1629654297299-c8506221ca97?w=800',
       startDate: new Date(now.getTime() + 1000 * 60 * 60 * 24), // Tomorrow
       endDate: new Date(now.getTime() + 1000 * 60 * 60 * 26),
@@ -255,14 +273,24 @@ async function main() {
 
   const workshop2 = await prisma.workshop.upsert({
     where: { slug: 'offensive-cybersecurity-web-pentesting' },
-    update: {},
+    update: {
+      domain: 'Cybersecurity',
+      environmentProfile: 'CYBERSECURITY_LAB',
+      requiredTools: ['kali-linux', 'bash', 'metasploit', 'nmap', 'netcat', 'burpsuite', 'wireshark'],
+      environmentStatus: 'READY',
+      environmentVersion: 1,
+    },
     create: {
       organisationId: organisation.id,
       organiserId: organiser.id,
       title: 'Offensive Cybersecurity & Web App Pentesting',
       slug: 'offensive-cybersecurity-web-pentesting',
-      description: 'Learn ethical hacking techniques in an isolated playground. Identify SQLi vulnerabilities, bypass flawed JWT tokens, and secure enterprise endpoints.',
+      description: 'Learn ethical hacking techniques in an isolated playground. Identify vulnerabilities with Metasploit and Nmap against a private Metasploitable 2 test target with zero local configuration.',
       domain: 'Cybersecurity',
+      environmentProfile: 'CYBERSECURITY_LAB',
+      requiredTools: ['kali-linux', 'bash', 'metasploit', 'nmap', 'netcat', 'burpsuite', 'wireshark'],
+      environmentStatus: 'READY',
+      environmentVersion: 1,
       bannerUrl: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800',
       startDate: new Date(now.getTime() + 1000 * 60 * 60 * 24 * 7),
       endDate: new Date(now.getTime() + 1000 * 60 * 60 * 24 * 7 + 1000 * 60 * 120),
@@ -275,22 +303,32 @@ async function main() {
   });
 
   const workshop3 = await prisma.workshop.upsert({
-    where: { slug: 'kubernetes-microservices-gitops' },
-    update: {},
+    where: { slug: 'practical-data-science-machine-learning-mysql' },
+    update: {
+      domain: 'Data Science',
+      environmentProfile: 'DATA_SCIENCE_LAB',
+      requiredTools: ['python', 'jupyterlab', 'numpy', 'pandas', 'matplotlib', 'seaborn', 'scikit-learn', 'mysql-server', 'mysql-client'],
+      environmentStatus: 'READY',
+      environmentVersion: 1,
+    },
     create: {
       organisationId: organisation.id,
       organiserId: organiser.id,
-      title: 'Kubernetes Microservices & GitOps Deployment',
-      slug: 'kubernetes-microservices-gitops',
-      description: 'Deploy resilient containerized workloads into a live K3s cluster. Configure automated canary rollouts and monitor ingress routing.',
-      domain: 'Cloud Computing',
-      bannerUrl: 'https://images.unsplash.com/photo-1667372393119-3d4c48d07fc9?w=800',
+      title: 'Practical Data Science, Machine Learning & MySQL',
+      slug: 'practical-data-science-machine-learning-mysql',
+      description: 'Interactive analytics and relational database workshop with Python 3.11, Pandas, Jupyter notebooks, and a local MySQL server with zero local setup needed.',
+      domain: 'Data Science',
+      environmentProfile: 'DATA_SCIENCE_LAB',
+      requiredTools: ['python', 'jupyterlab', 'numpy', 'pandas', 'matplotlib', 'seaborn', 'scikit-learn', 'mysql-server', 'mysql-client'],
+      environmentStatus: 'READY',
+      environmentVersion: 1,
+      bannerUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800',
       startDate: new Date(now.getTime() + 1000 * 60 * 60 * 24 * 14),
       endDate: new Date(now.getTime() + 1000 * 60 * 60 * 24 * 14 + 1000 * 60 * 180),
       duration: 180,
       registrationDeadline: new Date(now.getTime() + 1000 * 60 * 60 * 24 * 13),
       participantLimit: 60,
-      registrationCode: 'GDG-K8S-CLOUD',
+      registrationCode: 'GDG-DATA-2026',
       status: WorkshopStatus.PUBLISHED,
     },
   });
