@@ -5,6 +5,7 @@ import { WebSocketServer } from 'ws';
 import { SecurityManager } from './security/auth';
 import { ContainerManager } from './container/container-manager';
 import { TerminalWebSocketGateway } from './terminal/ws-gateway';
+import { WorkshopRealtimeGateway } from './realtime/ws-realtime-gateway';
 import { SessionReaper } from './monitoring/reaper';
 import { APPROVED_IMAGE_REGISTRY } from './config/image-registry';
 
@@ -88,7 +89,7 @@ export function createRunnerApp(options: {
   // 4. Session Query
   app.get('/api/v1/sessions/:id/status', requireDaemonAuth, async (req, res) => {
     try {
-      const status = await containerManager.getSessionStatus(req.params.id);
+      const status = await containerManager.getSessionStatus(req.params.id as string);
       if (!status) {
         return res.status(404).json({ error: 'Session container not found' });
       }
@@ -127,7 +128,7 @@ export function createRunnerApp(options: {
   // 6. Stop session
   app.post('/api/v1/sessions/:id/stop', requireDaemonAuth, async (req, res) => {
     try {
-      const stopped = await containerManager.stopSession(req.params.id);
+      const stopped = await containerManager.stopSession(req.params.id as string);
       res.json({ success: true, stopped });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -137,33 +138,72 @@ export function createRunnerApp(options: {
   // 7. Destroy session
   app.delete('/api/v1/sessions/:id', requireDaemonAuth, async (req, res) => {
     try {
-      const destroyed = await containerManager.destroySession(req.params.id);
+      const destroyed = await containerManager.destroySession(req.params.id as string);
       res.json({ success: true, destroyed });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  // 8. Reaper setup
+  // 8. Workshop Real-Time Broadcast
+  let realtimeGateway: WorkshopRealtimeGateway | null = null;
+  app.post('/api/v1/events/broadcast', requireDaemonAuth, (req, res) => {
+    try {
+      const deliveredCount = realtimeGateway?.broadcast(req.body) || 0;
+      res.json({ success: true, deliveredSockets: deliveredCount });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 9. Reaper setup
   let reaper: SessionReaper | null = null;
   if (options.enableReaper !== false) {
     reaper = new SessionReaper(containerManager, { checkIntervalMs: 15000 });
     reaper.start();
   }
 
-  return { app, security, containerManager, reaper };
+  const setRealtimeGateway = (gw: WorkshopRealtimeGateway) => {
+    realtimeGateway = gw;
+  };
+
+  return { app, security, containerManager, reaper, setRealtimeGateway };
 }
 
 export function startRunnerServer(port: number = 8080) {
-  const { app, security, containerManager, reaper } = createRunnerApp();
+  const { app, security, containerManager, reaper, setRealtimeGateway } = createRunnerApp();
   const server = http.createServer(app);
 
-  const wss = new WebSocketServer({ server, path: '/ws/terminal' });
-  new TerminalWebSocketGateway(wss, security, containerManager);
+  const terminalWss = new WebSocketServer({ noServer: true });
+  new TerminalWebSocketGateway(terminalWss, security, containerManager);
+
+  const workshopWss = new WebSocketServer({ noServer: true });
+  const realtimeGateway = new WorkshopRealtimeGateway(workshopWss, security);
+  setRealtimeGateway(realtimeGateway);
+
+  server.on('upgrade', (request, socket, head) => {
+    try {
+      const pathname = new URL(request.url || '', 'http://localhost').pathname;
+      if (pathname === '/ws/terminal') {
+        terminalWss.handleUpgrade(request, socket, head, (ws) => {
+          terminalWss.emit('connection', ws, request);
+        });
+      } else if (pathname === '/ws/workshop') {
+        workshopWss.handleUpgrade(request, socket, head, (ws) => {
+          workshopWss.emit('connection', ws, request);
+        });
+      } else {
+        socket.destroy();
+      }
+    } catch {
+      socket.destroy();
+    }
+  });
 
   server.listen(port, () => {
     console.log(`[GDG LabOps Runner] Execution Plane listening on port ${port}`);
-    console.log(`[GDG LabOps Runner] WebSocket Terminal Gateway available at ws://localhost:${port}/ws/terminal`);
+    console.log(`[GDG LabOps Runner] WebSocket Terminal Gateway at ws://localhost:${port}/ws/terminal`);
+    console.log(`[GDG LabOps Runner] WebSocket Real-Time Gateway at ws://localhost:${port}/ws/workshop`);
   });
 
   // Graceful shutdown handling

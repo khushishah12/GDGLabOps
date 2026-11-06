@@ -101,15 +101,25 @@ export default function StudentExplorePage() {
 
       if (wsRes.ok) {
         const wsJson = await wsRes.json();
-        if (wsJson.success && Array.isArray(wsJson.data)) {
-          setWorkshops(wsJson.data);
+        if (wsJson.success) {
+          const items = Array.isArray(wsJson.data)
+            ? wsJson.data
+            : Array.isArray(wsJson.data?.items)
+            ? wsJson.data.items
+            : [];
+          setWorkshops(items);
         }
       }
 
       if (regRes.ok) {
         const regJson = await regRes.json();
-        if (regJson.success && Array.isArray(regJson.data)) {
-          const registeredIds = new Set<string>(regJson.data.map((r: any) => r.workshopId || r.id));
+        if (regJson.success) {
+          const list = Array.isArray(regJson.data)
+            ? regJson.data
+            : Array.isArray(regJson.data?.items)
+            ? regJson.data.items
+            : [];
+          const registeredIds = new Set<string>(list.map((r: any) => r.workshopId || r.id));
           setRegisteredWorkshopIds(registeredIds);
         }
       }

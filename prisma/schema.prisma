@@ -131,6 +131,49 @@ enum NotificationType {
   WARNING
   ERROR
   ACHIEVEMENT
+  WORKSHOP_ANNOUNCEMENT
+  HELP_REQUEST_RESPONSE
+  HELP_REQUEST_STATUS_CHANGED
+  LAB_SESSION_STARTED
+  LAB_SESSION_FAILED
+  CHALLENGE_COMPLETED
+  WORKSHOP_UPDATED
+  REGISTRATION_STATUS_CHANGED
+}
+
+enum PresenceStatus {
+  ONLINE
+  IDLE
+  OFFLINE
+}
+
+enum AnnouncementPriority {
+  NORMAL
+  IMPORTANT
+  URGENT
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum HelpRequestCategory {
+  ENVIRONMENT_NOT_LAUNCHING
+  TERMINAL_NOT_WORKING
+  COMMAND_ISSUE
+  INSTRUCTIONS_UNCLEAR
+  CONCEPTUAL_QUESTION
+  OTHER
+}
+
+enum HelpRequestStatus {
+  OPEN
+  ACKNOWLEDGED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
 }
 
 // --------------------------------------------------------
@@ -161,6 +204,12 @@ model User {
   userAchievements    UserAchievement[]
   notifications       Notification[]
   auditLogs           AuditLog[]
+  createdAnnouncements WorkshopAnnouncement[] @relation("CreatedAnnouncements")
+  studentHelpRequests  HelpRequest[]          @relation("StudentHelpRequests")
+  assignedHelpRequests HelpRequest[]          @relation("AssignedHelpRequests")
+  helpMessages         HelpRequestMessage[]   @relation("HelpMessagesSent")
+  presences            WorkshopPresence[]
+  activities           WorkshopActivity[]
 
   @@map("users")
 }
@@ -249,6 +298,11 @@ model Workshop {
   labSessions          LabSession[]
   studentProgress      StudentProgress[]
   challengeSubmissions ChallengeSubmission[]
+  presences            WorkshopPresence[]
+  announcements        WorkshopAnnouncement[]
+  helpRequests         HelpRequest[]
+  activities           WorkshopActivity[]
+  outboxEvents         RealtimeEventOutbox[]
 
   @@index([registrationCode])
   @@index([status])
@@ -309,6 +363,7 @@ model LabTemplate {
   challenges      Challenge[]
   labSessions     LabSession[]
   studentProgress StudentProgress[]
+  helpRequests    HelpRequest[]
 
   @@index([organisationId])
   @@index([domain])
@@ -360,6 +415,7 @@ model Challenge {
   labTemplate LabTemplate           @relation(fields: [labTemplateId], references: [id], onDelete: Cascade)
   tasks       ChallengeTask[]
   submissions ChallengeSubmission[]
+  helpRequests HelpRequest[]
 
   @@index([labTemplateId])
   @@map("challenges")
@@ -542,6 +598,9 @@ model Notification {
   message   String           @db.Text
   type      NotificationType @default(INFO)
   isRead    Boolean          @default(false) @map("is_read")
+  link      String?
+  metadata  Json?
+  readAt    DateTime?        @map("read_at")
   createdAt DateTime         @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -592,4 +651,128 @@ model EmailVerificationToken {
 
   @@index([email])
   @@map("email_verification_tokens")
+}
+
+/// Real-time presence tracking per workshop participant
+model WorkshopPresence {
+  id             String         @id @default(uuid()) @db.Uuid
+  workshopId     String         @map("workshop_id") @db.Uuid
+  userId         String         @map("user_id") @db.Uuid
+  status         PresenceStatus @default(ONLINE)
+  clientCount    Int            @default(1) @map("client_count")
+  lastHeartbeat  DateTime       @default(now()) @map("last_heartbeat")
+  connectedAt    DateTime       @default(now()) @map("connected_at")
+  disconnectedAt DateTime?      @map("disconnected_at")
+
+  workshop Workshop @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workshopId, userId], name: "unique_workshop_user_presence")
+  @@index([workshopId, status])
+  @@index([userId])
+  @@map("workshop_presences")
+}
+
+/// Broadcast and scheduled announcements from workshop organisers
+model WorkshopAnnouncement {
+  id           String               @id @default(uuid()) @db.Uuid
+  workshopId   String               @map("workshop_id") @db.Uuid
+  createdById  String               @map("created_by_id") @db.Uuid
+  title        String
+  message      String               @db.Text
+  priority     AnnouncementPriority @default(NORMAL)
+  status       AnnouncementStatus   @default(PUBLISHED)
+  isPinned     Boolean              @default(false) @map("is_pinned")
+  targetGroup  String?              @map("target_group")
+  publishedAt  DateTime             @default(now()) @map("published_at")
+  scheduledAt  DateTime?            @map("scheduled_at")
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
+
+  workshop Workshop @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  author   User     @relation("CreatedAnnouncements", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([workshopId, publishedAt])
+  @@index([isPinned])
+  @@map("workshop_announcements")
+}
+
+/// Structured student assistance requests during live labs
+model HelpRequest {
+  id                   String              @id @default(uuid()) @db.Uuid
+  workshopId           String              @map("workshop_id") @db.Uuid
+  studentId            String              @map("student_id") @db.Uuid
+  labTemplateId        String?             @map("lab_template_id") @db.Uuid
+  challengeId          String?             @map("challenge_id") @db.Uuid
+  category             HelpRequestCategory @default(OTHER)
+  description          String              @db.Text
+  status               HelpRequestStatus   @default(OPEN)
+  assignedOrganiserId  String?             @map("assigned_organiser_id") @db.Uuid
+  resolutionNotes      String?             @db.Text @map("resolution_notes")
+  resolvedAt           DateTime?           @map("resolved_at")
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+
+  workshop          Workshop             @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  student           User                 @relation("StudentHelpRequests", fields: [studentId], references: [id], onDelete: Cascade)
+  assignedOrganiser User?                @relation("AssignedHelpRequests", fields: [assignedOrganiserId], references: [id], onDelete: SetNull)
+  labTemplate       LabTemplate?         @relation(fields: [labTemplateId], references: [id], onDelete: SetNull)
+  challenge         Challenge?           @relation(fields: [challengeId], references: [id], onDelete: SetNull)
+  messages          HelpRequestMessage[]
+
+  @@index([workshopId, status])
+  @@index([studentId])
+  @@index([assignedOrganiserId])
+  @@map("help_requests")
+}
+
+/// Threaded messages exchanged between student and organiser on a help request
+model HelpRequestMessage {
+  id            String   @id @default(uuid()) @db.Uuid
+  helpRequestId String   @map("help_request_id") @db.Uuid
+  senderId      String   @map("sender_id") @db.Uuid
+  senderRole    Role     @default(STUDENT) @map("sender_role")
+  message       String   @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  helpRequest HelpRequest @relation(fields: [helpRequestId], references: [id], onDelete: Cascade)
+  sender      User        @relation("HelpMessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([helpRequestId, createdAt])
+  @@map("help_request_messages")
+}
+
+/// Chronological immutable workshop activity timeline
+model WorkshopActivity {
+  id              String   @id @default(uuid()) @db.Uuid
+  workshopId      String   @map("workshop_id") @db.Uuid
+  eventType       String   @map("event_type")
+  actorId         String?  @map("actor_id") @db.Uuid
+  relatedEntityId String?  @map("related_entity_id")
+  metadata        Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  workshop Workshop @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  actor    User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([workshopId, createdAt])
+  @@index([eventType])
+  @@map("workshop_activities")
+}
+
+/// Transactional outbox pattern for reliable event distribution and replay
+model RealtimeEventOutbox {
+  id           String    @id @default(uuid()) @db.Uuid
+  workshopId   String    @map("workshop_id") @db.Uuid
+  eventType    String    @map("event_type")
+  targetUserId String?   @map("target_user_id") @db.Uuid
+  payload      Json
+  createdAt    DateTime  @default(now()) @map("created_at")
+  deliveredAt  DateTime? @map("delivered_at")
+
+  workshop Workshop @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+
+  @@index([workshopId, createdAt])
+  @@index([targetUserId])
+  @@map("realtime_event_outbox")
 }

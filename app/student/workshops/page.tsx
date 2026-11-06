@@ -62,11 +62,17 @@ export default function StudentMyWorkshopsPage() {
   const fetchRegistrations = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/student/workshops?studentId=${currentUser.id}`);
+      const studentQuery = currentUser.id ? `?studentId=${currentUser.id}` : '';
+      const res = await fetch(`/api/student/workshops${studentQuery}`);
       if (res.ok) {
         const json = await res.json();
-        if (json.success && Array.isArray(json.data)) {
-          setRegistrations(json.data);
+        if (json.success) {
+          const items = Array.isArray(json.data)
+            ? json.data
+            : Array.isArray(json.data?.items)
+            ? json.data.items
+            : [];
+          setRegistrations(items);
         }
       }
     } catch (err: any) {
@@ -163,16 +169,21 @@ export default function StudentMyWorkshopsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {registrations.map((reg) => {
               const ws = reg.workshop;
+              const firstLabId = (ws as any).workshopLabs?.[0]?.labTemplateId;
+              const labWorkspaceUrl = firstLabId
+                ? `/student/workshops/${ws.id}/labs/${firstLabId}`
+                : '/student/lab/demo-session';
+
               return (
                 <Card key={reg.id} className="flex flex-col justify-between hover:shadow-md transition-all">
                   <div>
                     {ws.bannerUrl && (
-                      <div className="h-32 w-full overflow-hidden rounded-t-xl relative border-b border-slate-200/60 dark:border-slate-800">
-                        <img src={ws.bannerUrl} alt={ws.title} className="h-full w-full object-cover" />
+                      <Link href={labWorkspaceUrl} className="block h-32 w-full overflow-hidden rounded-t-xl relative border-b border-slate-200/60 dark:border-slate-800 group">
+                        <img src={ws.bannerUrl} alt={ws.title} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
                         <div className="absolute top-2.5 right-2.5">
                           {getStatusBadge(reg.status)}
                         </div>
-                      </div>
+                      </Link>
                     )}
 
                     <CardHeader className="p-4 pb-2">
@@ -184,9 +195,11 @@ export default function StudentMyWorkshopsPage() {
                           {ws.registrationCode}
                         </span>
                       </div>
-                      <CardTitle className="text-sm font-bold pt-2 line-clamp-1">
-                        {ws.title}
-                      </CardTitle>
+                      <Link href={labWorkspaceUrl} className="hover:underline">
+                        <CardTitle className="text-sm font-bold pt-2 line-clamp-1">
+                          {ws.title}
+                        </CardTitle>
+                      </Link>
                     </CardHeader>
 
                     <CardContent className="p-4 pt-0 space-y-2.5 text-xs text-slate-500">
@@ -222,11 +235,18 @@ export default function StudentMyWorkshopsPage() {
 
                   <CardFooter className="p-4 pt-3 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
                     {reg.status === 'REGISTERED' ? (
-                      <Link href="/student/lab/demo-session" className="flex-1 mr-2">
-                        <Button size="sm" className="w-full text-xs h-8" leftIcon={<Play className="w-3.5 h-3.5" />}>
-                          Launch Sandbox
-                        </Button>
-                      </Link>
+                      <div className="flex items-center gap-2 flex-1 mr-2">
+                        <Link href={labWorkspaceUrl} className="flex-1">
+                          <Button size="sm" variant="outline" className="w-full text-xs h-8">
+                            Curriculum & Labs
+                          </Button>
+                        </Link>
+                        <Link href="/student/lab/demo-session" className="flex-1">
+                          <Button size="sm" className="w-full text-xs h-8" leftIcon={<Play className="w-3.5 h-3.5" />}>
+                            Launch Terminal
+                          </Button>
+                        </Link>
+                      </div>
                     ) : (
                       <div className="text-[11px] text-slate-400 italic">
                         {reg.status === 'WAITLISTED' ? 'Awaiting Seat' : 'Awaiting Review'}

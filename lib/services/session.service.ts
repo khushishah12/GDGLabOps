@@ -13,6 +13,9 @@ import {
 } from '@/lib/validations';
 import { RunnerClientService } from './runner-client.service';
 import { getApprovedImageProfile } from '@/lib/runner/image-registry';
+import { RealtimeEventService } from './realtime-event.service';
+import { ActivityService } from './activity.service';
+import { NotificationService } from './notification.service';
 import crypto from 'crypto';
 
 export class SessionService {
@@ -133,6 +136,17 @@ export class SessionService {
       },
     });
 
+    // Broadcast provisioning event
+    await RealtimeEventService.publish({
+      workshopId: data.workshopId,
+      eventType: 'lab:session:provisioning',
+      data: {
+        sessionId: session.id,
+        studentId: data.studentId,
+        profile: profile.id,
+      },
+    });
+
     // 6. Invoke Remote Execution Plane to allocate isolated container
     try {
       const runnerRes = await RunnerClientService.provision({
@@ -168,6 +182,39 @@ export class SessionService {
         },
       });
 
+      // Broadcast started lifecycle event & record activity
+      await RealtimeEventService.publish({
+        workshopId: data.workshopId,
+        eventType: 'lab:session:started',
+        data: {
+          sessionId: updated.id,
+          studentId: data.studentId,
+          profile: profile.id,
+          startedAt: updated.startedAt,
+          expiresAt: updated.expiresAt,
+        },
+      });
+
+      await ActivityService.record({
+        workshopId: data.workshopId,
+        eventType: 'LAB_LAUNCHED',
+        actorId: data.studentId,
+        relatedEntityId: updated.id,
+        metadata: {
+          profile: profile.id,
+          labTemplateName: updated.labTemplate?.name,
+        },
+      });
+
+      await NotificationService.create({
+        userId: data.studentId,
+        type: 'LAB_SESSION_STARTED',
+        title: 'Lab Sandbox Ready',
+        message: `Your cloud environment (${profile.id}) is online and ready for practice.`,
+        link: `/student/lab/${updated.id}`,
+        metadata: { sessionId: updated.id },
+      });
+
       return this.sanitizeSession(updated);
     } catch (err: any) {
       // Mark failed if runner provisioning errors
@@ -184,6 +231,24 @@ export class SessionService {
             },
           },
         },
+      });
+
+      await RealtimeEventService.publish({
+        workshopId: data.workshopId,
+        eventType: 'lab:session:failed',
+        data: {
+          sessionId: session.id,
+          studentId: data.studentId,
+          reason: err.message,
+        },
+      });
+
+      await NotificationService.create({
+        userId: data.studentId,
+        type: 'LAB_SESSION_FAILED',
+        title: 'Lab Launch Failed',
+        message: `Unable to allocate sandbox: ${err.message}`,
+        metadata: { sessionId: session.id },
       });
 
       throw new ConflictError(`Failed to launch lab container: ${err.message}`);
@@ -352,6 +417,26 @@ export class SessionService {
       },
     });
 
+    const isExpired = reason === 'TIMEOUT_EXPIRED';
+    await RealtimeEventService.publish({
+      workshopId: session.workshopId,
+      eventType: isExpired ? 'lab:session:expired' : 'lab:session:stopped',
+      data: {
+        sessionId: updated.id,
+        studentId: session.studentId,
+        reason,
+        stoppedAt: updated.stoppedAt,
+      },
+    });
+
+    await ActivityService.record({
+      workshopId: session.workshopId,
+      eventType: isExpired ? 'LAB_EXPIRED' : 'LAB_STOPPED',
+      actorId: initiatorUserId || session.studentId,
+      relatedEntityId: sessionId,
+      metadata: { reason },
+    });
+
     return this.sanitizeSession(updated);
   }
 
@@ -363,7 +448,14 @@ export class SessionService {
       where: { id: sessionId },
       include: {
         workshop: { select: { id: true, title: true, domain: true, organisationId: true } },
-        labTemplate: true,
+        labTemplate: {
+          include: {
+            challenges: {
+              include: { tasks: true },
+              orderBy: { displayOrder: 'asc' },
+            },
+          },
+        },
         events: {
           orderBy: { createdAt: 'desc' },
           take: 10,
@@ -406,7 +498,14 @@ export class SessionService {
       },
       include: {
         workshop: { select: { id: true, title: true, domain: true } },
-        labTemplate: true,
+        labTemplate: {
+          include: {
+            challenges: {
+              include: { tasks: true },
+              orderBy: { displayOrder: 'asc' },
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });

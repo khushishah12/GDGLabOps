@@ -13,6 +13,9 @@ import {
   EvaluationResult,
 } from '@/lib/challenges/evaluator';
 import { Prisma } from '@prisma/client';
+import { RealtimeEventService } from './realtime-event.service';
+import { ActivityService } from './activity.service';
+import { NotificationService } from './notification.service';
 
 export class ChallengeService {
   /**
@@ -192,6 +195,20 @@ export class ChallengeService {
   }
 
   /**
+   * Submit an answer to a challenge and evaluate it on the server
+   */
+  static async submit(params: {
+    studentId: string;
+    challengeId: string;
+    workshopId?: string | null;
+    labSessionId?: string | null;
+    answer: any;
+    usedHintIds?: string[];
+  }) {
+    return this.submitAndEvaluate(params);
+  }
+
+  /**
    * Pure server-side evaluation of challenge submission.
    * Updates challenge submission record, student progress, and user points idempotently.
    */
@@ -351,6 +368,49 @@ export class ChallengeService {
             challengeProgress: currentChallengeProgress as Prisma.InputJsonValue,
             completedAt: completionPercentage >= 100 ? progress.completedAt || new Date() : null,
           },
+        });
+      }
+
+      // Real-time Event Publishing (Prompt 8)
+      await RealtimeEventService.publish({
+        workshopId,
+        eventType: 'workshop:progress:updated',
+        data: {
+          studentId,
+          challengeId,
+          challengeTitle: challenge.title,
+          passed: evaluation.passed,
+          score: evaluation.score,
+          pointsAwarded: evaluation.pointsAwarded,
+          netPointsAwarded,
+          completedChallenges: completedChallengesCount,
+          totalChallenges: totalWorkshopChallenges,
+          completionPercentage,
+          totalPoints: totalPointsSum,
+          completedAt: evaluation.passed ? new Date().toISOString() : null,
+        },
+      });
+
+      if (evaluation.passed) {
+        await ActivityService.record({
+          workshopId,
+          eventType: 'CHALLENGE_COMPLETED',
+          actorId: studentId,
+          relatedEntityId: challengeId,
+          metadata: {
+            challengeTitle: challenge.title,
+            points: evaluation.pointsAwarded,
+            score: evaluation.score,
+          },
+        });
+
+        await NotificationService.create({
+          userId: studentId,
+          type: 'CHALLENGE_COMPLETED',
+          title: `Challenge Completed: ${challenge.title}`,
+          message: `Congratulations! You earned ${evaluation.pointsAwarded} points on "${challenge.title}".`,
+          link: `/student/workshops/${workshopId}`,
+          metadata: { challengeId, points: evaluation.pointsAwarded },
         });
       }
     }

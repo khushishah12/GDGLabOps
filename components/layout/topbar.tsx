@@ -36,6 +36,45 @@ export function Topbar({ onToggleMobile }: TopbarProps) {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Live Notifications State
+  const [realNotifications, setRealNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchNotifications = React.useCallback(async () => {
+    if (!currentUser.id) return;
+    try {
+      const res = await fetch('/api/notifications?limit=8');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          setRealNotifications(json.data.items || []);
+          setUnreadCount(json.data.unreadCount || 0);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [currentUser.id]);
+
+  React.useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 15000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
+  const handleMarkAllRead = async () => {
+    try {
+      const res = await fetch('/api/notifications/mark-all-read', { method: 'POST' });
+      if (res.ok) {
+        setUnreadCount(0);
+        setRealNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+        success('Notifications Cleared', 'All notifications marked as read.');
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   // Generate dynamic breadcrumb segments
   const pathSegments = pathname.split('/').filter(Boolean);
   const breadcrumbs = pathSegments.map((segment, index) => {
@@ -43,12 +82,6 @@ export function Topbar({ onToggleMobile }: TopbarProps) {
     const title = segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');
     return { title, href, isLast: index === pathSegments.length - 1 };
   });
-
-  const notifications = [
-    { id: 1, title: 'Elena Rostova completed Challenge 3', time: '5m ago', unread: true },
-    { id: 2, title: 'Marcus Chen requested instructor assistance', time: '12m ago', unread: true },
-    { id: 3, title: 'Worker Node #01 CPU load normal (18%)', time: '1h ago', unread: false },
-  ];
 
   return (
     <>
@@ -149,20 +182,37 @@ export function Topbar({ onToggleMobile }: TopbarProps) {
                 aria-label="View notifications"
               >
                 <Bell className="w-4 h-4" />
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-[#EA4335]" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 min-w-[14px] h-3.5 px-0.5 rounded-full bg-[#EA4335] text-[9px] font-bold text-white flex items-center justify-center">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
               </button>
             }
-            items={[
-              ...notifications.map((n) => ({
-                label: `${n.title} (${n.time})`,
-                icon: <CheckCircle2 className="w-3.5 h-3.5 text-blue-500" />,
-                onClick: () => info('Notification', n.title),
-              })),
-              {
-                label: 'View all notifications',
-                onClick: () => info('Notifications', 'All caught up!'),
-              },
-            ]}
+            items={
+              realNotifications.length > 0
+                ? [
+                    ...realNotifications.map((n) => ({
+                      label: `${n.title}: ${n.message.slice(0, 45)}...`,
+                      icon: <CheckCircle2 className={`w-3.5 h-3.5 ${n.isRead ? 'text-slate-400' : 'text-blue-500'}`} />,
+                      onClick: () => {
+                        fetch(`/api/notifications/${n.id}/read`, { method: 'PATCH' }).catch(() => {});
+                        fetchNotifications();
+                        if (n.link) window.location.href = n.link;
+                      },
+                    })),
+                    {
+                      label: 'Mark all as read',
+                      onClick: handleMarkAllRead,
+                    },
+                  ]
+                : [
+                    {
+                      label: 'No new notifications (All caught up!)',
+                      onClick: () => {},
+                    },
+                  ]
+            }
           />
 
           {/* Theme Switcher Toggle */}

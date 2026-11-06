@@ -432,3 +432,64 @@ export const updateProfileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100).optional(),
   avatar: z.string().url('Avatar must be a valid URL').optional().or(z.literal('')),
 });
+
+// ========================================================
+// Prompt 8: Real-Time Workshop Monitoring & Collaboration
+// ========================================================
+
+export const announcementPrioritySchema = z.enum(['NORMAL', 'IMPORTANT', 'URGENT']);
+export const announcementStatusSchema = z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']);
+
+export const createAnnouncementSchema = z.object({
+  title: z.string().min(3, 'Announcement title must be at least 3 characters').max(150),
+  message: z.string().min(5, 'Announcement message must be at least 5 characters').max(5000),
+  priority: announcementPrioritySchema.default('NORMAL'),
+  isPinned: z.boolean().default(false),
+  targetGroup: z.string().max(50).optional().nullable(),
+  scheduledAt: z.string().datetime().optional().nullable(),
+});
+
+export const updateAnnouncementSchema = createAnnouncementSchema.partial().extend({
+  status: announcementStatusSchema.optional(),
+});
+
+export const helpRequestCategorySchema = z.enum([
+  'ENVIRONMENT_NOT_LAUNCHING',
+  'TERMINAL_NOT_WORKING',
+  'COMMAND_ISSUE',
+  'INSTRUCTIONS_UNCLEAR',
+  'CONCEPTUAL_QUESTION',
+  'OTHER',
+]);
+
+export const helpRequestStatusSchema = z.enum([
+  'OPEN',
+  'ACKNOWLEDGED',
+  'IN_PROGRESS',
+  'RESOLVED',
+  'CLOSED',
+]);
+
+export const createHelpRequestSchema = z.object({
+  labTemplateId: uuidSchema.optional().nullable(),
+  challengeId: uuidSchema.optional().nullable(),
+  category: helpRequestCategorySchema.default('OTHER'),
+  description: z.string().min(5, 'Please provide at least 5 characters describing the issue').max(2000),
+});
+
+export const updateHelpRequestStatusSchema = z.object({
+  status: helpRequestStatusSchema,
+  assignedOrganiserId: uuidSchema.optional().nullable(),
+  resolutionNotes: z.string().max(2000).optional().nullable(),
+});
+
+export const createHelpMessageSchema = z.object({
+  message: z.string().min(1, 'Message cannot be empty').max(2000),
+});
+
+export const presenceStatusSchema = z.enum(['ONLINE', 'IDLE', 'OFFLINE']);
+
+export const presenceHeartbeatSchema = z.object({
+  status: presenceStatusSchema.default('ONLINE'),
+});
+

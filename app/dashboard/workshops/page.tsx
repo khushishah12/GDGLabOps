@@ -33,6 +33,7 @@ import {
   RefreshCw,
   Ban,
   ShieldAlert,
+  Radio,
 } from 'lucide-react';
 
 interface WorkshopItem {
@@ -87,8 +88,13 @@ export default function WorkshopListingPage() {
       const res = await fetch('/api/workshops');
       if (res.ok) {
         const json = await res.json();
-        if (json.success && Array.isArray(json.data)) {
-          setWorkshops(json.data);
+        if (json.success) {
+          const items = Array.isArray(json.data)
+            ? json.data
+            : Array.isArray(json.data?.items)
+            ? json.data.items
+            : [];
+          setWorkshops(items);
         }
       }
     } catch (err: any) {
@@ -485,15 +491,20 @@ export default function WorkshopListingPage() {
 
                   {/* Card Actions Footer */}
                   <CardFooter className="p-4 pt-3 flex flex-col gap-2 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/30 dark:bg-slate-900/20">
-                    <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center justify-between w-full gap-2">
                       <Link href={`/dashboard/workshops/${ws.id}/participants`}>
-                        <Button variant="outline" size="sm" className="text-xs h-7">
-                          Participants ({regCount})
+                        <Button variant="outline" size="sm" className="text-xs h-7 px-2">
+                          Students ({regCount})
+                        </Button>
+                      </Link>
+                      <Link href={`/dashboard/workshops/${ws.id}/live`}>
+                        <Button size="sm" className="text-xs h-7 px-2.5 bg-[#1a73e8] hover:bg-[#1557b0] text-white flex items-center gap-1 font-semibold">
+                          <Radio className="w-3 h-3 text-emerald-300 animate-pulse" /> Live Monitor
                         </Button>
                       </Link>
                       <Link href={`/dashboard/workshops/${ws.id}`}>
-                        <Button size="sm" className="text-xs h-7">
-                          View Details
+                        <Button variant="outline" size="sm" className="text-xs h-7 px-2">
+                          Details
                         </Button>
                       </Link>
                     </div>
