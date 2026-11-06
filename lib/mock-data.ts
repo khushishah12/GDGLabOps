@@ -9,7 +9,7 @@ import {
 
 export const mockUsers: Record<string, User> = {
   organiser: {
-    id: 'user-org-1',
+    id: '87d56bb0-1a18-44bf-be69-7bb8b0cf007a',
     name: 'Alex Rivera',
     email: 'alex.rivera@gdgcampus.dev',
     role: 'ORGANISER',
@@ -17,9 +17,9 @@ export const mockUsers: Record<string, User> = {
     institution: 'GDG on Campus - Silicon Valley University',
   },
   student: {
-    id: 'user-stu-1',
+    id: '50409751-b925-4de7-a23d-9e68026c00ee',
     name: 'Elena Rostova',
-    email: 'elena.rostova@university.edu',
+    email: 'elena.rostova@student.gdg.dev',
     role: 'STUDENT',
     avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
     institution: 'School of Computer Science',
@@ -27,7 +27,7 @@ export const mockUsers: Record<string, User> = {
     completedLabs: 4,
   },
   superadmin: {
-    id: 'user-admin-1',
+    id: '7786cd6c-2e35-456a-a06e-607012a226d1',
     name: 'Devon Vance',
     email: 'admin@gdglabops.internal',
     role: 'SUPER_ADMIN',

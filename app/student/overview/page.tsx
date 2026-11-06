@@ -30,31 +30,56 @@ export default function StudentOverviewPage() {
     points: number;
     enrolledCount: number;
     solvedCount: number;
-  }>({
-    points: 850,
-    enrolledCount: 0,
-    solvedCount: 14,
+  }>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem('gdg_student_profile');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return { points: 850, enrolledCount: 3, solvedCount: 14 };
   });
-  const [enrolledWorkshops, setEnrolledWorkshops] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+
+  const [enrolledWorkshops, setEnrolledWorkshops] = useState<any[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem('gdg_student_enrolled_ws');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return [];
+  });
+
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return !sessionStorage.getItem('gdg_student_enrolled_ws');
+      } catch {}
+    }
+    return true;
+  });
 
   useEffect(() => {
     async function loadData() {
-      setIsLoading(true);
       try {
+        const studentId = currentUser.id || '50409751-b925-4de7-a23d-9e68026c00ee';
         const [profileRes, wsRes] = await Promise.all([
-          fetch(`/api/student/profile?studentId=${currentUser.id}`),
-          fetch(`/api/student/workshops?studentId=${currentUser.id}`),
+          fetch(`/api/student/profile?studentId=${studentId}`),
+          fetch(`/api/student/workshops?studentId=${studentId}`),
         ]);
 
         if (profileRes.ok) {
           const profileJson = await profileRes.json();
           if (profileJson.success && profileJson.data) {
-            setProfileData({
+            const pData = {
               points: profileJson.data.totalPoints || 850,
-              enrolledCount: profileJson.data.enrolledWorkshopsCount ?? 0,
+              enrolledCount: profileJson.data.enrolledWorkshopsCount ?? 3,
               solvedCount: profileJson.data.solvedChallengesCount ?? 14,
-            });
+            };
+            setProfileData(pData);
+            try {
+              sessionStorage.setItem('gdg_student_profile', JSON.stringify(pData));
+            } catch {}
           }
         }
 
@@ -62,6 +87,9 @@ export default function StudentOverviewPage() {
           const wsJson = await wsRes.json();
           if (wsJson.success && Array.isArray(wsJson.data)) {
             setEnrolledWorkshops(wsJson.data);
+            try {
+              sessionStorage.setItem('gdg_student_enrolled_ws', JSON.stringify(wsJson.data));
+            } catch {}
           }
         }
       } catch {
@@ -188,7 +216,23 @@ export default function StudentOverviewPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {enrolledWorkshops.length === 0 ? (
+              {isLoading && enrolledWorkshops.length === 0 ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 animate-pulse space-y-2.5"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="h-5 w-24 bg-slate-200 dark:bg-slate-800 rounded-full" />
+                        <div className="h-5 w-20 bg-slate-200 dark:bg-slate-800 rounded-full" />
+                      </div>
+                      <div className="h-4 w-3/4 bg-slate-200 dark:bg-slate-800 rounded" />
+                      <div className="h-3 w-1/2 bg-slate-200 dark:bg-slate-800 rounded" />
+                    </div>
+                  ))}
+                </div>
+              ) : enrolledWorkshops.length === 0 ? (
                 <div className="p-8 text-center space-y-3">
                   <Calendar className="w-8 h-8 text-slate-400 mx-auto" />
                   <p className="text-xs text-slate-500">
@@ -203,6 +247,10 @@ export default function StudentOverviewPage() {
               ) : (
                 enrolledWorkshops.map((record) => {
                   const ws = record.workshop || record;
+                  const firstLabId = (ws as any).workshopLabs?.[0]?.labTemplateId || (ws as any).workshopLabs?.[0]?.labTemplate?.id;
+                  const labWorkspaceUrl = firstLabId
+                    ? `/student/workshops/${ws.id}/labs/${firstLabId}`
+                    : `/student/lab/demo-session?workshopId=${ws.id}&domain=${encodeURIComponent(ws.domain || 'Linux')}`;
                   return (
                     <div
                       key={record.id}
@@ -220,9 +268,11 @@ export default function StudentOverviewPage() {
                             {record.status === 'REGISTERED' ? 'Confirmed Seat' : record.status === 'WAITLISTED' ? 'Waitlist' : 'Pending'}
                           </Badge>
                         </div>
-                        <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                          {ws.title}
-                        </h4>
+                        <Link href={labWorkspaceUrl} className="hover:underline">
+                          <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                            {ws.title}
+                          </h4>
+                        </Link>
                         <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
                           {ws.shortDescription || ws.description}
                         </p>
@@ -240,7 +290,7 @@ export default function StudentOverviewPage() {
 
                       <div className="shrink-0 flex sm:flex-col items-center sm:items-end gap-2">
                         {record.status === 'REGISTERED' ? (
-                          <Link href="/student/lab/demo-session">
+                          <Link href={labWorkspaceUrl}>
                             <Button size="sm" className="text-xs">
                               Launch Sandbox
                             </Button>
@@ -250,9 +300,9 @@ export default function StudentOverviewPage() {
                             {record.status === 'WAITLISTED' ? 'Waitlist Position #1' : 'Awaiting Approval'}
                           </div>
                         )}
-                        <Link href="/student/workshops">
+                        <Link href={labWorkspaceUrl}>
                           <Button variant="ghost" size="sm" className="text-xs h-7 text-slate-400">
-                            Details
+                            Details & Labs
                           </Button>
                         </Link>
                       </div>

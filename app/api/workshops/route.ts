@@ -33,7 +33,9 @@ export async function GET(req: NextRequest) {
       limit,
     });
 
-    return apiSuccess(result);
+    const response = apiSuccess(result);
+    response.headers.set('Cache-Control', 'public, max-age=10, stale-while-revalidate=60');
+    return response;
   } catch (err) {
     return apiError(err);
   }

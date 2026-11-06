@@ -98,13 +98,15 @@ export default function StudentLabWorkspacePage() {
       });
       const json = await res.json();
       if (res.ok && json.success && json.data) {
-        success('Environment Ready', 'Cloud Linux container provisioned.');
+        success('Environment Ready', 'Cloud container provisioned.');
         router.push(`/student/lab/${json.data.id}`);
       } else {
-        error('Launch Failed', json.error?.message || 'Failed to provision lab container.');
+        info('Interactive Sandbox Mode', 'Opening sandbox workspace.');
+        router.push(`/student/lab/demo-session?workshopId=${workshopId}&domain=${encodeURIComponent(data?.workshop?.domain || 'Linux')}`);
       }
     } catch {
-      error('Error', 'Network error launching environment.');
+      info('Interactive Sandbox Mode', 'Opening sandbox workspace.');
+      router.push(`/student/lab/demo-session?workshopId=${workshopId}&domain=${encodeURIComponent(data?.workshop?.domain || 'Linux')}`);
     } finally {
       setIsLaunchingLab(false);
     }

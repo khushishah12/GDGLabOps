@@ -117,9 +117,8 @@ export class SessionService {
         });
       }
 
-      throw new ConflictError(
-        `You already have an active lab environment running for "${existingActive.workshop.title}". Please terminate it before launching a new one.`
-      );
+      // If the active session is for a different lab, terminate it gracefully so student can switch seamlessly
+      await this.terminateSession(existingActive.id, 'STUDENT_SWITCHED_WORKSHOP', data.studentId);
     }
 
     // 4. Generate unique session token

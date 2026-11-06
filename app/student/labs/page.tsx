@@ -78,7 +78,7 @@ export default function StudentMyLabsPage() {
                 </div>
 
                 <div className="flex items-center gap-2.5 shrink-0">
-                  <Link href="/student/lab/demo-session">
+                  <Link href={`/student/lab/demo-session?workshopId=${lab.id}&domain=${encodeURIComponent(lab.domain || 'Linux')}`}>
                     <Button size="sm" className="bg-[#1a73e8] hover:bg-[#1557b0] dark:bg-[#4285F4] text-xs" leftIcon={<Terminal className="w-4 h-4" />}>
                       Open Web Terminal
                     </Button>

@@ -72,14 +72,37 @@ export default function StudentExplorePage() {
   const { currentUser } = useUser();
   const { success, error, info } = useToast();
 
-  const [workshops, setWorkshops] = useState<PublicWorkshop[]>([]);
+  const [workshops, setWorkshops] = useState<PublicWorkshop[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem('gdg_student_explore_workshops');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return [];
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedDifficulty, setSelectedDifficulty] = useState('ALL');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return !sessionStorage.getItem('gdg_student_explore_workshops');
+      } catch {}
+    }
+    return true;
+  });
 
   // Student registered workshop IDs
-  const [registeredWorkshopIds, setRegisteredWorkshopIds] = useState<Set<string>>(new Set());
+  const [registeredWorkshopIds, setRegisteredWorkshopIds] = useState<Set<string>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem('gdg_student_reg_ids');
+        if (cached) return new Set(JSON.parse(cached));
+      } catch {}
+    }
+    return new Set();
+  });
 
   // Join With Code Modal
   const [isJoinCodeModalOpen, setIsJoinCodeModalOpen] = useState(false);
@@ -92,11 +115,11 @@ export default function StudentExplorePage() {
   const [isRegistering, setIsRegistering] = useState(false);
 
   const fetchWorkshopsAndRegistrations = async () => {
-    setIsLoading(true);
     try {
+      const studentId = currentUser.id || '50409751-b925-4de7-a23d-9e68026c00ee';
       const [wsRes, regRes] = await Promise.all([
         fetch('/api/workshops?isPublic=true'),
-        fetch(`/api/student/workshops?studentId=${currentUser.id}`),
+        fetch(`/api/student/workshops?studentId=${studentId}`),
       ]);
 
       if (wsRes.ok) {
@@ -108,6 +131,9 @@ export default function StudentExplorePage() {
             ? wsJson.data.items
             : [];
           setWorkshops(items);
+          try {
+            sessionStorage.setItem('gdg_student_explore_workshops', JSON.stringify(items));
+          } catch {}
         }
       }
 
@@ -121,6 +147,9 @@ export default function StudentExplorePage() {
             : [];
           const registeredIds = new Set<string>(list.map((r: any) => r.workshopId || r.id));
           setRegisteredWorkshopIds(registeredIds);
+          try {
+            sessionStorage.setItem('gdg_student_reg_ids', JSON.stringify(Array.from(registeredIds)));
+          } catch {}
         }
       }
     } catch (err: any) {
@@ -301,7 +330,24 @@ export default function StudentExplorePage() {
         </div>
 
         {/* Workshops Grid */}
-        {filteredWorkshops.length === 0 ? (
+        {isLoading && filteredWorkshops.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#0e1526] animate-pulse space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="h-5 w-24 bg-slate-200 dark:bg-slate-800 rounded-full" />
+                  <div className="h-5 w-16 bg-slate-200 dark:bg-slate-800 rounded-full" />
+                </div>
+                <div className="h-5 w-3/4 bg-slate-200 dark:bg-slate-800 rounded" />
+                <div className="h-3 w-full bg-slate-200 dark:bg-slate-800 rounded" />
+                <div className="h-8 w-full bg-slate-200 dark:bg-slate-800 rounded-lg pt-2" />
+              </div>
+            ))}
+          </div>
+        ) : filteredWorkshops.length === 0 ? (
           <EmptyState
             icon={<Calendar className="w-6 h-6" />}
             title="No workshops found"

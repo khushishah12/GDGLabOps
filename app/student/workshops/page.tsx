@@ -51,8 +51,23 @@ export default function StudentMyWorkshopsPage() {
   const { currentUser } = useUser();
   const { success, error, info } = useToast();
 
-  const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [registrations, setRegistrations] = useState<RegistrationRecord[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem('gdg_student_my_workshops');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return [];
+  });
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return !sessionStorage.getItem('gdg_student_my_workshops');
+      } catch {}
+    }
+    return true;
+  });
 
   // Cancellation Modal State
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -60,10 +75,9 @@ export default function StudentMyWorkshopsPage() {
   const [isCancelling, setIsCancelling] = useState(false);
 
   const fetchRegistrations = async () => {
-    setIsLoading(true);
     try {
-      const studentQuery = currentUser.id ? `?studentId=${currentUser.id}` : '';
-      const res = await fetch(`/api/student/workshops${studentQuery}`);
+      const studentId = currentUser.id || '50409751-b925-4de7-a23d-9e68026c00ee';
+      const res = await fetch(`/api/student/workshops?studentId=${studentId}`);
       if (res.ok) {
         const json = await res.json();
         if (json.success) {
@@ -73,6 +87,9 @@ export default function StudentMyWorkshopsPage() {
             ? json.data.items
             : [];
           setRegistrations(items);
+          try {
+            sessionStorage.setItem('gdg_student_my_workshops', JSON.stringify(items));
+          } catch {}
         }
       }
     } catch (err: any) {
@@ -157,7 +174,24 @@ export default function StudentMyWorkshopsPage() {
         </div>
 
         {/* Registrations List */}
-        {registrations.length === 0 ? (
+        {isLoading && registrations.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#0e1526] animate-pulse space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="h-5 w-24 bg-slate-200 dark:bg-slate-800 rounded-full" />
+                  <div className="h-5 w-16 bg-slate-200 dark:bg-slate-800 rounded-full" />
+                </div>
+                <div className="h-5 w-3/4 bg-slate-200 dark:bg-slate-800 rounded" />
+                <div className="h-3 w-full bg-slate-200 dark:bg-slate-800 rounded" />
+                <div className="h-8 w-full bg-slate-200 dark:bg-slate-800 rounded-lg pt-2" />
+              </div>
+            ))}
+          </div>
+        ) : registrations.length === 0 ? (
           <EmptyState
             icon={<Calendar className="w-6 h-6" />}
             title="No workshop registrations yet"
@@ -169,10 +203,10 @@ export default function StudentMyWorkshopsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {registrations.map((reg) => {
               const ws = reg.workshop;
-              const firstLabId = (ws as any).workshopLabs?.[0]?.labTemplateId;
+              const firstLabId = (ws as any).workshopLabs?.[0]?.labTemplateId || (ws as any).workshopLabs?.[0]?.labTemplate?.id;
               const labWorkspaceUrl = firstLabId
                 ? `/student/workshops/${ws.id}/labs/${firstLabId}`
-                : '/student/lab/demo-session';
+                : `/student/lab/demo-session?workshopId=${ws.id}&domain=${encodeURIComponent(ws.domain || 'Linux')}`;
 
               return (
                 <Card key={reg.id} className="flex flex-col justify-between hover:shadow-md transition-all">
@@ -241,7 +275,7 @@ export default function StudentMyWorkshopsPage() {
                             Curriculum & Labs
                           </Button>
                         </Link>
-                        <Link href="/student/lab/demo-session" className="flex-1">
+                        <Link href={labWorkspaceUrl} className="flex-1">
                           <Button size="sm" className="w-full text-xs h-8" leftIcon={<Play className="w-3.5 h-3.5" />}>
                             Launch Terminal
                           </Button>
