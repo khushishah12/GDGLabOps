@@ -7,6 +7,7 @@ export type WorkshopEventType =
   | 'workshop:announcement:published'
   | 'workshop:activity:new'
   | 'workshop:progress:updated'
+  | 'workshop:points:awarded'
   | 'workshop:help-request:created'
   | 'workshop:help-request:updated'
   | 'workshop:help-request:message'
@@ -67,17 +68,22 @@ export class RealtimeEventService {
     };
 
     // 1. Transactional Outbox persistence in Neon PostgreSQL
+    const isUuid = (str?: string | null) =>
+      typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
     try {
-      await prisma.realtimeEventOutbox.create({
-        data: {
-          id: eventId,
-          workshopId: params.workshopId,
-          eventType: params.eventType,
-          targetUserId: params.targetUserId || null,
-          payload: payload as any,
-          deliveredAt: new Date(),
-        },
-      });
+      if (isUuid(params.workshopId)) {
+        await prisma.realtimeEventOutbox.create({
+          data: {
+            id: eventId,
+            workshopId: params.workshopId,
+            eventType: params.eventType,
+            targetUserId: isUuid(params.targetUserId) ? params.targetUserId : null,
+            payload: payload as any,
+            deliveredAt: new Date(),
+          },
+        });
+      }
     } catch (err: any) {
       console.error('[RealtimeEventService] Failed to persist outbox event:', err.message);
     }

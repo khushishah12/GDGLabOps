@@ -34,7 +34,7 @@ export class WorkshopRealtimeGateway {
     // Periodic heartbeat cleaner: disconnect sockets dead > 60s
     setInterval(() => {
       const threshold = Date.now() - 60000;
-      for (const [ws, ctx] of this.clients.entries()) {
+      this.clients.forEach((ctx, ws) => {
         if (ctx.lastPing.getTime() < threshold) {
           try {
             ws.terminate();
@@ -43,7 +43,7 @@ export class WorkshopRealtimeGateway {
           }
           this.handleDisconnect(ws);
         }
-      }
+      });
     }, 15000);
   }
 
@@ -187,7 +187,7 @@ export class WorkshopRealtimeGateway {
     const payloadStr = JSON.stringify(event);
     let sentCount = 0;
 
-    for (const ws of recipients) {
+    recipients.forEach((ws) => {
       if (ws.readyState === WebSocket.OPEN) {
         try {
           ws.send(payloadStr);
@@ -196,7 +196,7 @@ export class WorkshopRealtimeGateway {
           // ignore dead socket
         }
       }
-    }
+    });
 
     return sentCount;
   }

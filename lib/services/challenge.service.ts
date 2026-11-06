@@ -16,6 +16,7 @@ import { Prisma } from '@prisma/client';
 import { RealtimeEventService } from './realtime-event.service';
 import { ActivityService } from './activity.service';
 import { NotificationService } from './notification.service';
+import { GamificationService } from './gamification.service';
 
 export class ChallengeService {
   /**
@@ -392,6 +393,28 @@ export class ChallengeService {
       });
 
       if (evaluation.passed) {
+        const pointsToAward = netPointsAwarded > 0 ? netPointsAwarded : evaluation.pointsAwarded;
+        if (pointsToAward > 0) {
+          try {
+            await GamificationService.awardPoints({
+              userId: studentId,
+              amount: pointsToAward,
+              reason: `Challenge Passed: ${challenge.title}`,
+              sourceActivity: 'CHALLENGE_COMPLETION',
+              referenceId: submission.id,
+              workshopId: workshopId || undefined,
+              challengeId: challengeId,
+              organisationId: challenge.labTemplate?.organisationId,
+              metadata: {
+                score: evaluation.score,
+                submissionId: submission.id,
+              },
+            });
+          } catch (ptsErr) {
+            console.warn('Failed to award gamification points for challenge submission:', ptsErr);
+          }
+        }
+
         await ActivityService.record({
           workshopId,
           eventType: 'CHALLENGE_COMPLETED',

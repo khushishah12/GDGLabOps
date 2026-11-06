@@ -367,18 +367,19 @@ async function main() {
 
   // 8. Seed Achievements
   const achievements = [
-    { id: '30000000-0000-0000-0000-000000000001', name: 'Shell Master', description: 'Solved 10 POSIX terminal challenges without viewing hints', icon: 'Terminal', category: 'DevOps', points: 100 },
-    { id: '30000000-0000-0000-0000-000000000002', name: 'Container Pilot', description: 'Deployed multi-pod Kubernetes services and passed all probes', icon: 'Shield', category: 'Cloud', points: 150 },
-    { id: '30000000-0000-0000-0000-000000000003', name: 'Speed Demon', description: 'Completed challenge evaluation in under 180 seconds', icon: 'Zap', category: 'General', points: 100 },
-    { id: '30000000-0000-0000-0000-000000000004', name: 'Vulnerability Slayer', description: 'Patched SQL injection vulnerability on first attempt', icon: 'Sparkles', category: 'Security', points: 200 },
+    { id: '30000000-0000-0000-0000-000000000001', slug: 'shell-master', name: 'Shell Master', description: 'Solved 10 POSIX terminal challenges without viewing hints', icon: 'Terminal', category: 'DevOps', points: 100 },
+    { id: '30000000-0000-0000-0000-000000000002', slug: 'container-pilot', name: 'Container Pilot', description: 'Deployed multi-pod Kubernetes services and passed all probes', icon: 'Shield', category: 'Cloud', points: 150 },
+    { id: '30000000-0000-0000-0000-000000000003', slug: 'speed-demon', name: 'Speed Demon', description: 'Completed challenge evaluation in under 180 seconds', icon: 'Zap', category: 'General', points: 100 },
+    { id: '30000000-0000-0000-0000-000000000004', slug: 'vulnerability-slayer', name: 'Vulnerability Slayer', description: 'Patched SQL injection vulnerability on first attempt', icon: 'Sparkles', category: 'Security', points: 200 },
   ];
 
   for (const ach of achievements) {
     const createdAch = await prisma.achievement.upsert({
       where: { id: ach.id },
-      update: {},
+      update: { slug: ach.slug },
       create: {
         id: ach.id,
+        slug: ach.slug,
         name: ach.name,
         description: ach.description,
         icon: ach.icon,

@@ -397,4 +397,47 @@ export class RegistrationService {
       },
     });
   }
+
+  /**
+   * Mark student attendance and award attendance gamification points.
+   */
+  static async markAttendance(registrationId: string, attendanceStatus: AttendanceStatus, actorId?: string) {
+    const reg = await prisma.workshopRegistration.findUnique({
+      where: { id: registrationId },
+      include: {
+        workshop: { select: { id: true, title: true, organisationId: true } },
+      },
+    });
+
+    if (!reg) {
+      throw new NotFoundError('Registration record not found');
+    }
+
+    const updated = await prisma.workshopRegistration.update({
+      where: { id: registrationId },
+      data: {
+        attendanceStatus,
+        status: attendanceStatus === 'ATTENDED' ? 'ATTENDED' : reg.status,
+      },
+    });
+
+    if (attendanceStatus === 'ATTENDED') {
+      try {
+        const { GamificationService } = await import('./gamification.service');
+        await GamificationService.awardPoints({
+          userId: reg.studentId,
+          amount: 50,
+          reason: `Attended workshop: ${reg.workshop.title}`,
+          sourceActivity: 'WORKSHOP_ATTENDANCE',
+          referenceId: reg.id,
+          workshopId: reg.workshop.id,
+          organisationId: reg.workshop.organisationId,
+        });
+      } catch (err) {
+        console.warn('Could not award attendance points:', err);
+      }
+    }
+
+    return updated;
+  }
 }

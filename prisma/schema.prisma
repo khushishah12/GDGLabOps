@@ -176,6 +176,13 @@ enum HelpRequestStatus {
   CLOSED
 }
 
+enum PointsTransactionType {
+  EARNED
+  REVERSED
+  ADJUSTED
+  BONUS
+}
+
 // --------------------------------------------------------
 // ENTITIES
 // --------------------------------------------------------
@@ -210,6 +217,10 @@ model User {
   helpMessages         HelpRequestMessage[]   @relation("HelpMessagesSent")
   presences            WorkshopPresence[]
   activities           WorkshopActivity[]
+  pointsTransactions   PointsTransaction[]
+  workshopFeedbacks    WorkshopFeedback[]
+  totalPoints          Int                    @default(0) @map("total_points")
+  leaderboardOptOut    Boolean                @default(false) @map("leaderboard_opt_out")
 
   @@map("users")
 }
@@ -225,10 +236,12 @@ model Organisation {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   // Relations
-  members      OrganisationMembership[]
-  workshops    Workshop[]
-  labTemplates LabTemplate[]
-  auditLogs    AuditLog[]
+  members            OrganisationMembership[]
+  workshops          Workshop[]
+  labTemplates       LabTemplate[]
+  auditLogs          AuditLog[]
+  achievements       Achievement[]
+  pointsTransactions PointsTransaction[]
 
   @@map("organisations")
 }
@@ -303,6 +316,8 @@ model Workshop {
   helpRequests         HelpRequest[]
   activities           WorkshopActivity[]
   outboxEvents         RealtimeEventOutbox[]
+  feedbacks            WorkshopFeedback[]
+  pointsTransactions   PointsTransaction[]
 
   @@index([registrationCode])
   @@index([status])
@@ -563,15 +578,24 @@ model StudentProgress {
 
 /// Catalog of achievement badges
 model Achievement {
-  id          String @id @default(uuid()) @db.Uuid
-  name        String
-  description String
-  icon        String
-  category    String
-  points      Int    @default(50)
+  id             String            @id @default(uuid()) @db.Uuid
+  slug           String            @unique
+  name           String
+  description    String
+  icon           String
+  category       String
+  points         Int               @default(50)
+  criteria       Json?
+  badgeUrl       String?           @map("badge_url")
+  organisationId String?           @map("organisation_id") @db.Uuid
+  isActive       Boolean           @default(true) @map("is_active")
+  createdAt      DateTime          @default(now()) @map("created_at")
 
+  organisation     Organisation?     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   userAchievements UserAchievement[]
 
+  @@index([organisationId])
+  @@index([slug])
   @@map("achievements")
 }
 
@@ -775,4 +799,54 @@ model RealtimeEventOutbox {
   @@index([workshopId, createdAt])
   @@index([targetUserId])
   @@map("realtime_event_outbox")
+}
+
+/// Append-only transactional ledger for gamification points
+model PointsTransaction {
+  id             String                @id @default(uuid()) @db.Uuid
+  userId         String                @map("user_id") @db.Uuid
+  organisationId String?               @map("organisation_id") @db.Uuid
+  workshopId     String?               @map("workshop_id") @db.Uuid
+  challengeId    String?               @map("challenge_id") @db.Uuid
+  amount         Int                   // positive for earned, negative for reversals
+  type           PointsTransactionType @default(EARNED)
+  reason         String
+  sourceActivity String                @map("source_activity") // e.g. "CHALLENGE_COMPLETION", "LAB_COMPLETION", "WORKSHOP_ATTENDANCE", "BONUS"
+  referenceId    String?               @map("reference_id")    // e.g. submissionId, registrationId, txId
+  idempotencyKey String                @unique @map("idempotency_key")
+  metadata       Json?
+  createdAt      DateTime              @default(now()) @map("created_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation Organisation? @relation(fields: [organisationId], references: [id], onDelete: SetNull)
+  workshop     Workshop?     @relation(fields: [workshopId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([workshopId])
+  @@index([organisationId])
+  @@map("points_transactions")
+}
+
+/// Structured student feedback collected after workshop participation
+model WorkshopFeedback {
+  id                       String   @id @default(uuid()) @db.Uuid
+  workshopId               String   @map("workshop_id") @db.Uuid
+  studentId                String   @map("student_id") @db.Uuid
+  contentRating            Int      @default(5) @map("content_rating") // 1-5
+  instructorRating         Int      @default(5) @map("instructor_rating") // 1-5
+  labQualityRating         Int      @default(5) @map("lab_quality_rating") // 1-5
+  platformExperienceRating Int      @default(5) @map("platform_experience_rating") // 1-5
+  overallRating            Float    @default(5.0) @map("overall_rating") // 1-5
+  comments                 String?  @db.Text
+  suggestions              String?  @db.Text
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  workshop Workshop @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  student  User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([workshopId, studentId], name: "unique_workshop_student_feedback")
+  @@index([workshopId])
+  @@index([studentId])
+  @@map("workshop_feedbacks")
 }
